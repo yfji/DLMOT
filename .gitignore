@@ -1,0 +1,10 @@
+#pyc
+*.pyc
+
+#image files
+*.jpg
+*.png
+
+#model files
+*.pkl
+*.pth
