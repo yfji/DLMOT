@@ -8,3 +8,7 @@
 #model files
 *.pkl
 *.pth
+
+#lib files
+*.so
+*.o
