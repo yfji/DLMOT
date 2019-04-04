@@ -11,8 +11,10 @@ cfg = __C
 
 __C.PHASE='TRAIN'
 __C.OPTIMIZER='sgd'    #adam or sgd
-__C.GPU_ID=[6,7]
-__C.DATA_DIR='E:/yufji/DETRAC-train-data'
+__C.GPU_ID=[0]
+#__C.DATA_DIR='E:/yufji/DETRAC-train-data'
+__C.DATA_DIR='/mnt/sda7/DETRAC-train-data'
+__C.PRETRAINED_DIR='/home/yfji/Pretrained/pytorch'
 __C.PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
 __C.IMAGE_NORMALIZE= False
 __C.GAIN=0.02
@@ -52,9 +54,6 @@ __C.BBOX_NORMALIZE_STDS = np.array([[0.1, 0.1, 0.2, 0.2]])
 __C.RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
 __C.BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
 
-__C.PRETRAINED_DIR='E:/yufji/Pretrained'
-__C.VGG_BN_DIR=osp.join(__C.PRETRAINED_DIR, 'vgg16_bn_features.pth')
-__C.VGG_DIR=osp.join(__C.PRETRAINED_DIR, 'vgg16.pth')
 
 """TRAIN"""
 '''Fast-RCNN'''

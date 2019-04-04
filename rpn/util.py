@@ -108,14 +108,20 @@ def get_boxes_classes_list(temp_boxes, det_boxes, temp_classes, det_classes, num
     det_boxes_list=[]
     temp_classes_list=[]
     det_classes_list=[]
-    for i, box_size in enumerate(num_boxes):
+    for i, box_size in enumerate(num_boxes[0]):
         left=start
         right=start+box_size
         temp_boxes_list.append(temp_boxes[left:right])
-        det_boxes_list.append(det_boxes[left:right])
         temp_classes_list.append(temp_classes[left:right])
+        start+=box_size
+    start=0
+    for i, box_size in enumerate(num_boxes[1]):
+        left=start
+        right=start+box_size
+        det_boxes_list.append(det_boxes[left:right])
         det_classes_list.append(det_classes[left:right])
         start+=box_size
+        
     return temp_boxes_list+det_boxes_list, temp_classes_list+det_classes_list
 
 def bbox_transform(rois, gt_rois):

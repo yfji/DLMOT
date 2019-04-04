@@ -2,7 +2,7 @@ from __future__ import print_function
 import os
 import torch
 from torch.utils.ffi import create_extension
-
+import sys
 # sources = ['src/roi_align.c']
 # headers = ['src/roi_align.h']
 sources = []
@@ -22,6 +22,18 @@ print(this_file)
 extra_objects = ['src/roi_align_kernel.cu.o']
 extra_objects = [os.path.join(this_file, fname) for fname in extra_objects]
 
+libraries=[]
+extra_compile_args=None
+
+if sys.platform=='win32':
+     extra_compile_args=['/openmp','/MD']
+     libraries=['caffe2','caffe2_gpu','_C','cudart']
+elif sys.platform=='linux':
+     extra_compile_args=['-fopenmp','-std=c99']
+else:
+     raise NotImplementedError
+     
+     
 ffi = create_extension(
     '_ext.roi_align',
     headers=headers,
@@ -30,7 +42,8 @@ ffi = create_extension(
     relative_to=__file__,
     with_cuda=with_cuda,
     extra_objects=extra_objects,
-	libraries=['caffe2','caffe2_gpu','_C','cudart']
+    extra_compile_args=extra_compile_args,
+    libraries=libraries
 )
 
 if __name__ == '__main__':

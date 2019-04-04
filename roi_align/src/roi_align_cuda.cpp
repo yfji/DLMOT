@@ -1,9 +1,15 @@
 #include <THC/THC.h>
 #include <math.h>
+#ifdef _WIN32
 #include <ATen/ATen.h>
+#endif
 #include "roi_align_kernel.h"
 
+#ifdef _WIN32
 THCState *state = at::globalContext().getTHCState();
+#else
+extern THCState *state;
+#endif
 
 extern "C"{
 int roi_align_forward_cuda(int aligned_height, int aligned_width, float spatial_scale,

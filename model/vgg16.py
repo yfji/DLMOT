@@ -2,9 +2,10 @@ import torch
 import torch.nn as nn
 from core.config import cfg
 from collections import OrderedDict
+import os.path as op
 
-VGG_PRETRAINED_BN=cfg.VGG_BN_DIR
-VGG_PRETRAINED=cfg.VGG_DIR
+VGG_PRETRAINED_BN=op.join(cfg.PRETRAINED_DIR, 'vgg16_bn.pth')
+VGG_PRETRAINED=op.join(cfg.PRETRAINED_DIR, 'vgg16.pth')
 
 class Vgg16(nn.Module):
     def __init__(self, bn=True, relu=False, pretrained=False):

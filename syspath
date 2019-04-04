@@ -1,2 +1,2 @@
 export CUDA_VISIBLE_DEVICES=0
-export PYTHONPATH=/home/yfji/Workspace/PyTorch/DLMOT_Final4:$PYTHONPATH
+export PYTHONPATH=/home/yfji/Workspace/PyTorch/DLMOT_mgpu:$PYTHONPATH

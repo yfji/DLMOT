@@ -1,11 +1,17 @@
 #include <THC/THC.h>
+#ifdef _WIN32
 #include <ATen/ATen.h>
+#endif
 #include <stdio.h>
 #include "nms_cuda_kernel.h"
 
 // this symbol will be resolved automatically from PyTorch libs
-//extern THCState *state;
+//
+#ifdef _WIN32
 THCState *state = at::globalContext().getTHCState();
+#else
+extern THCState *state;
+#endif
 
 extern "C"{
 int nms_cuda(THCudaIntTensor *keep_out, THCudaTensor *boxes_host,

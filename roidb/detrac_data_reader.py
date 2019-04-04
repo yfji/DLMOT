@@ -162,6 +162,12 @@ class DetracDataReader(DataReader):
 
         if len(temp_boxes_align)>0:            
             '''NHWC'''
+            if det_image is None:
+                 print(temp_boxes)
+                 print(det_boxes)
+                 print(temp_boxes_align)
+                 print(det_boxes_align)
+                 assert 0
             bound=(det_image.shape[2], det_image.shape[1])
             
             search_boxes=np.zeros((0,4),dtype=np.float32)

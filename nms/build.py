@@ -2,7 +2,7 @@ from __future__ import print_function
 import os
 import torch
 from torch.utils.ffi import create_extension
-
+import sys
 #this_file = os.path.dirname(__file__)
 
 sources = []
@@ -23,6 +23,14 @@ extra_objects = ['src/nms_cuda_kernel.o']
 extra_objects = [os.path.join(this_file, fname) for fname in extra_objects]
 print(extra_objects)
 
+extra_compile_args=None
+if sys.platform=='win32':
+     extra_compile_args = ['/openmp', '/MD']
+     libraries=['caffe2','caffe2_gpu','_C','cudart']
+else:
+     extra_compile_args = ['-fopenmp','-std=c99']
+     libraries=[]
+
 ffi = create_extension(
     '_ext.nms',
     headers=headers,
@@ -31,8 +39,8 @@ ffi = create_extension(
     relative_to=__file__,
     with_cuda=with_cuda,
     extra_objects=extra_objects,
-    extra_compile_args = ['/openmp', '/MD'],
-    libraries=['caffe2','caffe2_gpu','_C','cudart']
+    extra_compile_args=extra_compile_args,
+    libraries=libraries
 )
 
 if __name__ == '__main__':

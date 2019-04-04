@@ -262,7 +262,8 @@ class MotFRCNN(nn.Module):
         temp_box_list = []
         det_box_list = []
         search_box_list=[]
-        num_boxes=[]
+        temp_num_boxes=[]
+        det_num_boxes=[]
         temp_classes_list=[]
         det_classes_list=[]
         best_inds=[]
@@ -279,7 +280,8 @@ class MotFRCNN(nn.Module):
             temp_classes_list.append(db['temp_classes'])
             det_classes_list.append(db['det_classes'])            
             search_box_list.append(db['search_boxes'])
-            num_boxes.append(db['temp_boxes4det'].shape[0])
+            temp_num_boxes.append(db['temp_boxes4det'].shape[0])
+            det_num_boxes.append(db['det_boxes4det'].shape[0])
             best_ind=db['best_ind']
             best_inds.append(best_ind)
             temp_boxes_siam.append(db['temp_boxes'][best_ind])
@@ -302,7 +304,6 @@ class MotFRCNN(nn.Module):
         self.temp_classes=np.concatenate(temp_classes_list, 0)
         self.det_classes=np.concatenate(det_classes_list, 0)        
         self.search_boxes=search_boxes
-        self.num_boxes=num_boxes
 
         self.best_inds=best_inds
         self.temp_boxes_for_siamese=np.vstack(temp_boxes_siam)
@@ -310,7 +311,7 @@ class MotFRCNN(nn.Module):
         self.search_boxes_for_siamese=np.vstack(search_boxes_siam)
         self.track_anchors=best_anchors
         
-        n_boxes=self.det_boxes_for_siamese.shape[0]
+        
          #NHWC-->NCHW
         temp_image=Variable(torch.from_numpy(temp_image.transpose(0, 3, 1, 2)).cuda())
         det_image=Variable(torch.from_numpy(det_image.transpose(0, 3, 1, 2)).cuda())
@@ -352,6 +353,7 @@ class MotFRCNN(nn.Module):
             print('track_rpn_bbox_det shape: ', end='');print(track_rpn_bbox_det.shape)
         
         temp_ksize=self.temp_roi_size
+        n_boxes=self.det_boxes_for_siamese.shape[0]
         
         track_rpn_cls_temp=track_rpn_cls_temp.view(2*self.TK*n_boxes, self.track_rpn_out_ch, temp_ksize, temp_ksize)
         track_rpn_bbox_temp=track_rpn_bbox_temp.view(4*self.TK*n_boxes, self.track_rpn_out_ch, temp_ksize, temp_ksize)
@@ -379,7 +381,7 @@ class MotFRCNN(nn.Module):
         detect_rpn_logits=detect_rpn_logits.view(2*self.batch_size, 2, self.K*self.out_size[1], self.out_size[0])
         
         all_proposals=self.gen_proposals(detect_rpn_logits, detect_rpn_bbox, det_anchors, 2*self.batch_size)
-        gt_boxes, gt_classes=U.get_boxes_classes_list(self.temp_boxes, self.det_boxes, self.temp_classes, self.det_classes, num_boxes)
+        gt_boxes, gt_classes=U.get_boxes_classes_list(self.temp_boxes, self.det_boxes, self.temp_classes, self.det_classes, (temp_num_boxes, det_num_boxes))
 
         proposals, proposal_cls_targets, proposal_bbox_targets, bbox_weights, labels=\
             get_proposal_target(all_proposals, gt_boxes, gt_classes, 2*self.batch_size)
@@ -415,7 +417,7 @@ class MotFRCNN(nn.Module):
 #        output['det_classes']=self.det_classes
         output['gt_boxes']=gt_boxes
         output['search_boxes']=self.search_boxes
-        output['num_boxes']=self.num_boxes
+#        output['num_boxes']=self.num_boxes
 
         output['best_inds']=self.best_inds
         output['temp_boxes_for_siamese']=self.temp_boxes_for_siamese

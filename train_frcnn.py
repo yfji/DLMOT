@@ -333,7 +333,7 @@ class TrainEngine(object):
                     track_denominator_rpn+=1e-4
                     denominator_frcnn+=1e-4
 
-                    gain=1.1
+                    gain=1.0
                     track_rpn_loss_cls=F.cross_entropy(output_dict['track_rpn_logits'], track_anchor_cls_targets, size_average=True, ignore_index=-100)
                     track_rpn_loss_bbox=F.smooth_l1_loss(track_rpn_bbox, track_anchor_bbox_targets, size_average=False, reduce=False)
                     detect_rpn_loss_cls=F.cross_entropy(output_dict['detect_rpn_logits'], detect_anchor_cls_targets, size_average=True, ignore_index=-100)
