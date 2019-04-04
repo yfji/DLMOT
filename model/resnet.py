@@ -2,11 +2,12 @@ import torch
 import torch.nn as nn
 import os.path as op
 from collections import OrderedDict
+from core.config import cfg
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152']
 
-model_dir='/home/yfji/Pretrained/pytorch'
+model_dir=cfg.PRETRAINED_DIR
 model_paths = {
     'resnet18': 'resnet18.pth',
     'resnet34': 'resnet34.pth',

@@ -32,15 +32,13 @@ def filter_boxes(boxes):
     filter_inds=np.where(np.bitwise_and(ws>16,hs>16)==1)[0]
     return filter_inds
 
-def align_boxes(ref_boxes, det_boxes, ref_classes, det_classes):
+def align_boxes(ref_boxes, det_boxes):
     ref_ids=list(ref_boxes.keys())
     det_ids=list(det_boxes.keys())
 
     ref_boxes_align = []
     det_boxes_align = []
 
-    ref_classes_align=[]
-    det_classes_align=[]
     if len(ref_ids)==0:
         print('Empty ref_ids')
     else:
@@ -49,13 +47,10 @@ def align_boxes(ref_boxes, det_boxes, ref_classes, det_classes):
 
         for ref_id in ref_ids:
             ref_boxes_align.append(ref_boxes[ref_id])
-            ref_classes_align.append(ref_classes[ref_id])
             if ref_id not in det_ids:
                 det_boxes_align.append(np.zeros(4, dtype=np.float32))
-                det_classes_align.append(0)
             else:
                 det_boxes_align.append(det_boxes[ref_id])
-                det_classes_align.append(det_classes[ref_id])
 
     if len(ref_boxes_align)==0:
         ref_boxes_align=np.zeros((0,4))
@@ -66,17 +61,12 @@ def align_boxes(ref_boxes, det_boxes, ref_classes, det_classes):
     else:
         det_boxes_align=np.vstack(det_boxes_align)
     
-    ref_classes_align=np.array(ref_classes_align)
-    det_classes_align=np.array(det_classes_align)
-
     if len(ref_ids)>0:
         inds=filter_boxes(ref_boxes_align)
         ref_boxes_align=ref_boxes_align[inds]
         det_boxes_align=det_boxes_align[inds]
-        ref_classes_align=ref_classes_align[inds]
-        det_classes_align=det_classes_align[inds]
 
-    return ref_boxes_align, det_boxes_align, ref_classes_align, det_classes_align
+    return ref_boxes_align, det_boxes_align
 
 def clip_bboxes(bboxes, w, h):
     _bboxes=bboxes.copy()

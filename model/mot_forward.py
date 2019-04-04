@@ -318,8 +318,6 @@ class MotFRCNN(nn.Module):
         
         output={}
         if task=='all':
-#            track_rpn_logits, track_rpn_bbox=forward_track(roidb, x,z)
-#            detect_rpn_logits, detect_rpn_bbox, frcnn_logits, frcnn_probs, frcnn_bbox=forward_detect(roidb, batch_x)
             ret_track=self.forward_track(roidb, x, z)
             ret_det=self.forward_detect(roidb, batch_x)
             
@@ -341,13 +339,10 @@ class MotFRCNN(nn.Module):
             output['frcnn_probs']=ret_det['frcnn_probs']
             output['proposals']=ret_det['proposals']
             output['num_proposals']=ret_det['num_proposals']
-#        elif task=='track':
         else:
             ret_track=self.forward_track(roidb, x, z)
             output['track_rpn_logits']=ret_track['track_rpn_logits']
             output['track_rpn_bbox']=ret_track['track_rpn_bbox']
-        
-
 #        return out_cls, out_bbox, all_proposals
         return output  
 

@@ -3,8 +3,8 @@ import torch.nn as nn
 from core.config import cfg
 from collections import OrderedDict
 
-VGG_PRETRAINED_BN='/home/yfji/Pretrained/pytorch/vgg16_bn_features.pth'
-VGG_PRETRAINED='/home/yfji/Pretrained/pytorch/vgg16.pth'
+VGG_PRETRAINED_BN=cfg.VGG_BN_DIR
+VGG_PRETRAINED=cfg.VGG_DIR
 
 class Vgg16(nn.Module):
     def __init__(self, bn=True, relu=False, pretrained=False):

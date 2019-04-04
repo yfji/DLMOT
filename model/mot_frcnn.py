@@ -23,12 +23,12 @@ import rpn.util as U
 #from rpn.nms import nms
 from fast_rcnn.proposal_target import get_proposal_target
 from core.config import cfg
-
 from nms.nms_wrapper import nms
-from roialign.roi_align.crop_and_resize import CropAndResizeFunction
+#from roialign.roi_align.crop_and_resize import CropAndResizeFunction
+from roi_align.functions.roi_align import RoIAlignFunction
 
 DEBUG=False
-
+'''
 def crop_and_resize(pool_size, feature_map, boxes, box_ind):
     if boxes.shape[1]==5:
         x1, y1, x2, y2, _= boxes.chunk(5, dim=1)
@@ -42,6 +42,17 @@ def crop_and_resize(pool_size, feature_map, boxes, box_ind):
 
     boxes = torch.cat((y1, x1, y2, x2), 1)
     return CropAndResizeFunction(pool_size[0],pool_size[1],0)(feature_map, boxes, box_ind)
+'''
+def crop_and_resize(pool_size, feature_map, boxes, box_ind):
+    if boxes.shape[1]==5:
+        x1, y1, x2, y2, _= boxes.chunk(5, dim=1)
+    else:
+        x1, y1, x2, y2= boxes.chunk(4, dim=1)
+    
+    box_ind=box_ind.view(-1,1).float()
+
+    boxes = torch.cat((box_ind, x1, y1, x2, y2), 1)
+    return RoIAlignFunction(pool_size[0],pool_size[1], 1)(feature_map, boxes)
 
 def nms_cuda(boxes_np, nms_thresh=0.7, xyxy=True):    
     if xyxy:
@@ -84,7 +95,7 @@ class MotFRCNN(nn.Module):
 
         self.use_bn=not cfg.IMAGE_NORMALIZE
         self.rpn_conv_size=cfg.RPN_CONV_SIZE
-        self.batch_size=cfg[cfg.PHASE].IMS_PER_BATCH
+        self.batch_size=cfg[cfg.PHASE].IMS_PER_BATCH//len(cfg.GPU_ID)
 
     def load_weights(self, model_path=None):
         print('loading model from {}'.format(model_path))
@@ -263,12 +274,12 @@ class MotFRCNN(nn.Module):
         for db in roidbs:
             temp_image_list.append(db['temp_image'])
             det_image_list.append(db['det_image'])
-            temp_box_list.append(db['temp_boxes'])
-            det_box_list.append(db['det_boxes'])
+            temp_box_list.append(db['temp_boxes4det'])
+            det_box_list.append(db['det_boxes4det'])
             temp_classes_list.append(db['temp_classes'])
             det_classes_list.append(db['det_classes'])            
             search_box_list.append(db['search_boxes'])
-            num_boxes.append(db['temp_boxes'].shape[0])
+            num_boxes.append(db['temp_boxes4det'].shape[0])
             best_ind=db['best_ind']
             best_inds.append(best_ind)
             temp_boxes_siam.append(db['temp_boxes'][best_ind])
@@ -398,10 +409,21 @@ class MotFRCNN(nn.Module):
         output['num_fgs']=num_fgs
         output['labels']=labels
 
+#        output['temp_boxes4det']=self.temp_boxes        
+#        output['det_boxes4det']=self.det_boxes
+#        output['temp_classes']=self.temp_classes
+#        output['det_classes']=self.det_classes
+        output['gt_boxes']=gt_boxes
+        output['search_boxes']=self.search_boxes
+        output['num_boxes']=self.num_boxes
+
+        output['best_inds']=self.best_inds
+        output['temp_boxes_for_siamese']=self.temp_boxes_for_siamese
+        output['det_boxes_for_siamese']=self.det_boxes_for_siamese
+        output['search_boxes_for_siamese']=self.search_boxes_for_siamese
+        output['track_anchors']=self.track_anchors
 #        return out_cls, out_bbox, all_proposals
         return output
-    
-
 
 if __name__=='__main__':
     model=MotFRCNN(100,100)

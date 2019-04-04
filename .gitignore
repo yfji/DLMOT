@@ -12,3 +12,5 @@
 #lib files
 *.so
 *.o
+*.dll
+*.pyd
