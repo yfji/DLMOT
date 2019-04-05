@@ -11,7 +11,7 @@ cfg = __C
 
 __C.PHASE='TRAIN'
 __C.OPTIMIZER='sgd'    #adam or sgd
-__C.GPU_ID=[0]
+__C.GPU_ID=[0,1]
 #__C.DATA_DIR='E:/yufji/DETRAC-train-data'
 __C.DATA_DIR='/mnt/sda7/DETRAC-train-data'
 __C.PRETRAINED_DIR='/home/yfji/Pretrained/pytorch'

@@ -10,9 +10,6 @@ import roidb.image_utils as util
 import roidb.box_utils as butil
 import xml.etree.ElementTree as ET
 from core.config import cfg
-import copy
-import PIL.Image as Image
-import torchvision.transforms as transforms
 
 EXTRA_SEQS=['MVI_39761','MVI_39781','MVI_39811','MVI_39851',\
             'MVI_39931','MVI_40152','MVI_40162','MVI_40211',\
@@ -103,9 +100,9 @@ class DetracDataReader(DataReader):
         for ind in [ref_ind, det_ind]:
             img_file=img_files[ind]
             #HWC
-            image = np.array(Image.open(op.join(img_dir, img_file)))
+            image = cv2.imread(op.join(img_dir, img_file))
             h,w=image.shape[0:2]
-            #resize(image, (rows, cols))
+
             image=cv2.resize(image, (self.im_w, self.im_h), interpolation=cv2.INTER_LINEAR)
             nh, nw=image.shape[0:2]
 
@@ -162,12 +159,13 @@ class DetracDataReader(DataReader):
 
         if len(temp_boxes_align)>0:            
             '''NHWC'''
-            if det_image is None:
-                 print(temp_boxes)
-                 print(det_boxes)
-                 print(temp_boxes_align)
-                 print(det_boxes_align)
-                 assert 0
+#            if det_image is None:
+#                 print(temp_boxes)
+#                 print(det_boxes)
+#                 print(temp_boxes_align)
+#                 print(det_boxes_align)
+#                 exit(0)
+                 
             bound=(det_image.shape[2], det_image.shape[1])
             
             search_boxes=np.zeros((0,4),dtype=np.float32)

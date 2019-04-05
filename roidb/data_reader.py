@@ -55,6 +55,9 @@ class DataReader(object):
         seq_index=np.argmin(c)
 
         ref_ind=index-self.start_per_seq[seq_index]
+        if ref_ind==self.images_per_seq[seq_index]-1:
+             ref_ind-=self.max_interval
+             
         interval=np.random.randint(1,self.max_interval+1)
         det_ind=ref_ind+interval
         det_ind=min(det_ind, self.images_per_seq[seq_index]-1)
