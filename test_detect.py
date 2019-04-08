@@ -9,8 +9,8 @@ from inference import CLASSES, inference_detect
 import roidb.box_utils as butil
 import rpn.generate_anchors as G
 
-im_width=768
-im_height=448
+im_width=640
+im_height=384
 
 colors = [ [0, 255, 255], [255, 85, 0], 
               [255, 170, 0], [255, 255, 0], 
@@ -62,7 +62,7 @@ def main(dataset_obj, model=None):
             break
 
 if __name__=='__main__':
-    model_path='./ckpt/dl_mot_epoch_12.pkl'
+    model_path='./ckpt/dl_mot_epoch_7.pkl'
 #    model_path='./ckpt/dl_mot_iter_660000.pkl'
     cfg.PHASE='TEST'
     cfg.DET_SCORE_THRESH=0.95

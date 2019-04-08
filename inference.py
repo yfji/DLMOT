@@ -10,8 +10,9 @@ import cv2
 from model.mot_forward import MotFRCNN
 from model.mot_forward import nms_cuda
 import rpn.generate_anchors as G
+from roidb.detrac_data_reader import DetracDataReader
 from rpn.util import bbox_transform_inv
-from rpn.generate_proposals import select_proposals_cosine
+from rpn.generate_proposals import *
 from core.config import cfg
 
 import logging
@@ -102,53 +103,32 @@ def get_track_output(output_dict, configs):
     track_rpn_bbox=track_rpn_bbox.cpu().data.numpy().transpose(0,2,3,1).reshape(num_targets, -1, 4)
     
     bboxes_list=[]
-    anchors_list=[]
 
     for i in range(num_targets):
         temp_box=temp_boxes[i]
-        temp_cx=0.5*(temp_box[0]+temp_box[2])
-        temp_cy=0.5*(temp_box[1]+temp_box[3])
 
         rpn_cls=track_rpn_cls[i]
         rpn_bbox=track_rpn_bbox[i]
-#        print(rpn_cls.size)
-#        print(rpn_bbox.shape[0])
-        order=np.argsort(rpn_cls)[::-1]
         
-        _anchors=G.gen_region_anchors(raw_anchors, search_boxes[i].reshape(1,-1), bound, K, size=(rpn_conv_size, rpn_conv_size))[0]
-        
-        top=1
-#        print(rpn_cls[order[:top]])
-        
-        fg_anchors=_anchors[order[:top]]
-        fg_rpn_bbox=rpn_bbox[order[:top]]
-                       
+        target_anchors=G.gen_region_anchors(raw_anchors, search_boxes[i].reshape(1,-1),\
+             bound, K, size=(rpn_conv_size, rpn_conv_size))[0]
+                      
         if cfg.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
-            fg_rpn_bbox*=cfg.BBOX_STD_DEV
+            rpn_bbox*=cfg.BBOX_STD_DEV
             
-        bboxes=bbox_transform_inv(fg_anchors, fg_rpn_bbox)
-        '''
-        best_id=select_proposals_cosine(temp_boxes[i], bboxes, rpn_cls[order[:top]], order[:top], rpn_conv_size, K)
-        anchors_list.append(fg_anchors[best_id][np.newaxis,:])
-        bboxes_list.append(bboxes[best_id][np.newaxis,:])
-        '''
+        bboxes=bbox_transform_inv(target_anchors, rpn_bbox)
+        bboxes_with_score=np.hstack((bboxes,rpn_cls.reshape(-1,1)))
         
-        if np.max(rpn_cls[order[:top]])<cfg.TRACK_SCORE_THRESH:
+#        proposals=top_proposals(temp_box, bboxes_with_score, dist_thresh=cfg.TRACK_MAX_DIST, topN=10)
+        proposals=best_proposal_hann(bboxes_with_score, rpn_conv_size, K)
+        scores=proposals[:,-1]
+        if np.max(scores)<cfg.TRACK_SCORE_THRESH:
             bboxes_list.append([])
         else:
-            cx=0.5*(bboxes[:,0]+bboxes[:,2])
-            cy=0.5*(bboxes[:,1]+bboxes[:,3])
-            dist_cx=np.abs(cx-temp_cx)
-            dist_cy=np.abs(cy-temp_cy)
-
-            fg_inds=np.where(np.bitwise_and(dist_cx<cfg.TRACK_MAX_DIST, dist_cy<cfg.TRACK_MAX_DIST)==1)[0]
-            bboxes_list.append(bboxes[fg_inds])
+            bboxes_list.append(proposals[:,:4])
         
-#        bboxes_list.append(bboxes)
-        anchors_list.append(fg_anchors)    
     ret={}
     ret['bboxes_list']=bboxes_list
-    ret['anchors_list']=anchors_list
     return ret           
 
 def inference_detect(model, roidb, batch_size=-1):
@@ -208,9 +188,7 @@ def inference_track(model, roidb):
     configs['bound']=bound
     ret = get_track_output(output_dict, configs)
     bboxes_list=ret['bboxes_list']
-    anchors_list=ret['anchors_list']
-    return bboxes_list, anchors_list
-    
+    return bboxes_list
 
 def draw_detect_boxes(images, detects, with_proposals=True):
     assert len(images)==len(detects)
@@ -241,49 +219,45 @@ def draw_detect_boxes(images, detects, with_proposals=True):
                 box=box.astype(np.int32)
                 cv2.rectangle(image, (box[0],box[1]),(box[2],box[3]), (0,255,0), 1)
 
-def draw_track_boxes(det_image, temp_boxes, search_boxes, bbox_list, anchor_list, fg_inds_local_list=None):
+def draw_track_boxes(det_image, temp_boxes, search_boxes, bbox_list):
 #    temp_image=images[0]
 #    det_image=images[1]
 
     for i in range(temp_boxes.shape[0]):
         temp_box=temp_boxes[i].astype(np.int32)
-        search_box=search_boxes[i].astype(np.int32)
+#        search_box=search_boxes[i].astype(np.int32)
         cv2.rectangle(det_image, (temp_box[0],temp_box[1]), (temp_box[2],temp_box[3]), (255,0,0), 1)
 
         if len(bbox_list[i])==0:
             continue
         bboxes=bbox_list[i].astype(np.int32)
-        fg_anchors=anchor_list[i].astype(np.int32)
-        if fg_inds_local_list is not None:
-            fg_inds=fg_inds_local_list[i]
-        
-        if fg_inds_local_list is not None:
-            '''draw grids'''
-            pass
-#        for anchor in fg_anchors:
-#            cv2.rectangle(det_image, (anchor[0], anchor[1]),(anchor[2],anchor[3]), (0,255,0), 1)
+
         for box in bboxes:
             cv2.rectangle(det_image, (box[0], box[1]),(box[2],box[3]), (0,255,0), 1)
         
 
 if __name__=='__main__':
-    from roidb.detrac_data_loader import DetracDataLoader
+    im_width=640
+    im_height=384
     
     cfg.PHASE='TEST'
     cfg.NUM_CLASSES=len(CLASSES)
     cfg.TEST.RPN_NMS_THRESH=0.6
+    cfg.TEST.NMS_THRESH=0.6
+    cfg.TRACK_SCORE_THRESH=0
+    cfg.TRACK_MAX_DIST=20
+    cfg.TEMP_MAX_SIZE=min(im_width, im_height)
+    cfg.TEMP_NUM=3    
     
-    im_width=640
-    im_height=384
-    model_path='./ckpt/dl_mot_epoch_12.pkl'
+    model_path='./ckpt/dl_mot_epoch_7.pkl'
     
-    loader=DetracDataLoader(im_width, im_height, batch_size=1)
+    loader=DetracDataReader(im_width, im_height, batch_size=1)
     
     model=MotFRCNN(im_width, im_height, pretrained=False)
     model.load_weights(model_path)
     model.cuda()
     
-    roidb=loader.get_minibatch()    
+    roidb=loader.__getitem__(10)    
     if len(roidb)==0:
         print('No targets, return')
     else:
@@ -295,9 +269,9 @@ if __name__=='__main__':
             cv2.imshow('det', img)
             cv2.waitKey()
         '''
-        bboxes_list, anchors_list=inference_track(model, roidb)
+        bboxes_list=inference_track(model, roidb)
         det_image=images[1]
-        draw_track_boxes(det_image, roidb['temp_boxes'], roidb['search_boxes'], bboxes_list, anchors_list, fg_inds_local_list=None)
+        draw_track_boxes(det_image, roidb['temp_boxes'], roidb['search_boxes'], bboxes_list)
         cv2.imwrite('result.jpg', det_image)
         cv2.imshow('det', det_image)
         print('Track result has been written to result.jpg')

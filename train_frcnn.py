@@ -53,7 +53,7 @@ def set_gpu_id():
 
 class TrainEngine(object):
     def __init__(self, backbone_pretrained=False):
-        self.batch_size=4
+        self.batch_size=2
         self.stride=STRIDE[net_type]   
         self.im_w, self.im_h=RESOLUTION[net_type]
 
@@ -82,8 +82,8 @@ class TrainEngine(object):
         cfg.STRIDE=self.stride
         cfg.TEMP_MIN_SIZE=64
         cfg.TEMP_MAX_SIZE=min(self.im_h, self.im_w)
-        cfg.TEMP_NUM=3
-        cfg.GAIN=0.015
+        cfg.TEMP_NUM=4
+        cfg.GAIN=0.012
 
     def fetch_config(self):
         self.basic_size=cfg.BASIC_SIZE
@@ -261,17 +261,11 @@ class TrainEngine(object):
                         print('Forward costs {}s'.format(toc-tic))
 
                     det_anchors=roidbs[0]['anchors']
-#                    temp_boxes=output_dict['temp_boxes4det']
-#                    det_boxes=output_dict['det_boxes4det']
-#                    search_boxes=output_dict['search_boxes']
 
-                    temp_boxes_siam=output_dict['temp_boxes_for_siamese']
-                    det_boxes_siam=output_dict['det_boxes_for_siamese']
-                    search_boxes_siam=output_dict['search_boxes_for_siamese']
-#                    temp_classes=output_dict['temp_classes']
-#                    det_classes=output_dict['det_classes']
-                    
-#                    num_boxes=output_dict['num_boxes']
+                    temp_boxes_siam=output_dict['temp_boxes4siamese']
+                    det_boxes_siam=output_dict['det_boxes4siamese']
+                    search_boxes_siam=output_dict['search_boxes4siamese']
+
                     track_anchors=output_dict['track_anchors']
 
                     bound=(self.im_w, self.im_h)
@@ -284,7 +278,6 @@ class TrainEngine(object):
                         T.compute_track_rpn_targets(track_anchors, det_boxes_siam, \
                             bbox_overlaps=None, bound=bound, rpn_conv_size=self.rpn_conv_size,K=self.TK)
                     
-#                    gt_boxes, _=U.get_boxes_classes_list(temp_boxes, det_boxes, temp_classes, det_classes, num_boxes)
                     gt_boxes=output_dict['gt_boxes']
 
                     detect_anchor_cls_targets, detect_anchor_bbox_targets, detect_bbox_weights, detect_fg_anchor_inds=\
@@ -313,7 +306,6 @@ class TrainEngine(object):
                             canvas_cpy=canvas.copy()
                             self.vis_anchors(canvas_cpy, temp_boxes_siam[left:right], det_boxes_siam[left:right], search_boxes_siam[left:right], track_anchors[left:right], track_fg_anchor_inds[i])
                             cv2.imwrite('vis_anchors/vis_{}.jpg'.format(iters), canvas_cpy)
-#                            cv2.imwrite('vis_anchors_mot/vis_{}.jpg'.format(iters), canvas_cpy)
                             start+=num_boxes_track[i]
                     
                     '''
@@ -385,7 +377,7 @@ class TrainEngine(object):
 
                 epoch_iters+=1
                 
-            if epoch>0 and epoch%self.snapshot:
+            if epoch>0 and epoch%self.snapshot==0:
                 self.save_ckpt(stepvalues, epoch, lr, logger)
                 
             if len(stepvalues)>0 and (epoch+1)==stepvalues[0]:
@@ -407,6 +399,7 @@ if __name__=='__main__':
     set_gpu_id()
 
     cfg.PHASE='TRAIN'
+    cfg.TRAIN.RPN_NMS_THRESH=0.7
     cfg.NUM_CLASSES=5
 #    pretrained='./dl_mot_pretrained.pkl'
     pretrained='./ckpt/dl_mot_epoch_12.pkl'

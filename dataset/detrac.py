@@ -5,80 +5,25 @@ import os.path as op
 import numpy as np
 import cv2
 import xml.etree.ElementTree as ET
-
-'''
-v0.2
-get only image
-'''
+from core.config import cfg
 
 class Detrac(Dataset):
-    def __init__(self, im_width=0, im_height=0, name='KITTI'):
-        super(Detrac, self).__init__(im_width=im_width, im_height=im_height, name=name)
+    def __init__(self, im_width=0, im_height=0, name='Detrac', load_gt=True):
+        super(Detrac, self).__init__(im_width=im_width, im_height=im_height, name=name, load_gt=load_gt)
+
         print('Using benchmark {}'.format(self.dataset_name))
-        self.data_dir = '/mnt/sda7/DETRAC-train-data/Insight-MVT_Annotation_Val'
-        self.get_dataset()
-        self.index=0
+        self.data_dir = op.join(cfg.DATA_DIR, 'Insight-MVT_Annotation_Train')
+        if self.load_gt:
+            self.anno_dir = op.join(cfg.DATA_DIR, 'DETRAC-Train-Annotations-XML')        
 
-    def get_dataset(self):
-        seqs=sorted(os.listdir(self.data_dir))
-        detrac_all_dirs={}
-        seq_ind_map={}
-
-        self.num_sequences=0
-        for i in range(len(seqs)):
-            seq=seqs[i]
-            seq_ind_map[seq]=i
-            detrac_all_dirs[i]=seq
-            self.num_sequences+=1
-
-        self.seq_ind_map=seq_ind_map
-        self.dataset=detrac_all_dirs
-
-    def choice(self, seq_name=None):
-        if seq_name is None:
-            self.choice_img_dir=op.join(self.data_dir,self.dataset[0])
-        else:
-            assert seq_name in self.seq_ind_map.keys(), '{} not exists'.format(seq_name)
-            seq_ind=self.seq_ind_map[seq_name]
-            self.choice_img_dir=op.join(self.data_dir, self.dataset[seq_ind])
-
-        self.image_files=sorted(os.listdir(self.choice_img_dir))
-        self.num_samples=len(self.image_files)
-        self.index=0
-
-    def __len__(self):
-        return self.num_sequences
-
-    def __getitem__(self):
-        ind=self.index
-        if ind<self.num_samples:
-            image_file=op.join(self.choice_img_dir, self.image_files[ind])
-            image=cv2.imread(image_file)            
-            image_scaled=cv2.resize(image, (self.im_w, self.im_h), interpolation=cv2.INTER_LINEAR)
-
-            self.index+=1            
-            return image_scaled
-        else:
-            return None
-'''
-v0.1
-get both image and gt
-'''
-'''
-class Detrac(Dataset):
-    def __init__(self, im_width=0, im_height=0, name='Detrac'):
-        super(Detrac, self).__init__(im_width=im_width, im_height=im_height, name=name)
-        print('Using benchmark {}'.format(self.dataset_name))
-        self.data_dir = '/mnt/sda7/DETRAC-train-data/Insight-MVT_Annotation_Train'
-        self.anno_dir = '/mnt/sda7/DETRAC-train-data/DETRAC-Train-Annotations-XML'
-        
         self.get_dataset()
         assert len(self.dataset)==len(self.annotations), 'Dataset and annotations not uniformed'
         self.index=0
 
     def get_dataset(self):
-        seqs=sorted(os.listdir(self.data_dir))
-        anno_files=sorted(os.listdir(self.anno_dir))
+        seqs=sorted(os.listdir(self.data_dir)) 
+        if self.load_gt:       
+            anno_files=sorted(os.listdir(self.anno_dir))
         detrac_all_dirs={}
         seq_ind_map={}
 
@@ -91,20 +36,24 @@ class Detrac(Dataset):
 
         self.seq_ind_map=seq_ind_map
         self.dataset=detrac_all_dirs
-        self.annotations=anno_files
+        if self.load_gt:
+            self.annotations=anno_files
 
     def choice(self, seq_name=None):
         if seq_name is None:
             self.choice_img_dir=op.join(self.data_dir,self.dataset[0])
-            self.choice_anno_file=op.join(self.anno_dir,self.annotations[0]) 
+            if self.load_gt:
+                self.choice_anno_file=op.join(self.anno_dir,self.annotations[0]) 
         else:
             assert seq_name in self.seq_ind_map.keys(), '{} not exists'.format(seq_name)
             seq_ind=self.seq_ind_map[seq_name]
             self.choice_img_dir=op.join(self.data_dir, self.dataset[seq_ind])
-            self.choice_anno_file=op.join(self.anno_dir, self.annotations[seq_ind])    
+            if self.load_gt:
+                self.choice_anno_file=op.join(self.anno_dir, self.annotations[seq_ind])    
 
         self.image_files=sorted(os.listdir(self.choice_img_dir))
-        self.gt_boxes=self.get_gt_boxes(self.choice_anno_file)
+        if self.load_gt:
+            self.gt_boxes=self.get_gt_boxes(self.choice_anno_file)
         self.num_samples=len(self.image_files)
         self.index=0
 
@@ -150,11 +99,14 @@ class Detrac(Dataset):
         if ind<self.num_samples:
             image_file=op.join(self.choice_img_dir, self.image_files[ind])
             gt_boxes=self.gt_boxes[ind]
-            image=cv2.imread(image_file)            
-            image_scaled, gt_boxes=self.imresize(image, gt_boxes)
-  
-            self.index+=1            
-            return image_scaled, gt_boxes
+            image=cv2.imread(image_file)         
+            if self.load_gt:   
+                image_scaled, gt_boxes=self.imresize(image, gt_boxes)  
+                self.index+=1            
+                return image_scaled, gt_boxes
+            else:
+                image_scaled=cv2.resize(image, (self.im_w, self.im_h), interpolation=cv2.INTER_LINEAR)
+                self.index+=1            
+                return image_scaled
         else:
             return None
-'''            

@@ -10,8 +10,8 @@ import roidb.box_utils as butil
 import rpn.generate_anchors as G
 from rpn.template import get_template
 
-im_width=768
-im_height=448
+im_width=640
+im_height=384
 
 MAX_TEMPLATE_SIZE=im_height
 
@@ -28,7 +28,7 @@ colors = [ [0, 255, 255], [255, 85, 0],
               [255, 0, 0], [255, 85, 0], 
               [255, 170, 0], [255, 255, 0]]
 
-templates=get_template(min_size=64, max_size=im_height, num_templates=5)
+templates=get_template(min_size=64, max_size=im_height, num_templates=3)
 det_raw_anchors=G.generate_anchors(cfg.BASIC_SIZE, cfg.RATIOS, cfg.SCALES)
 track_raw_anchors=G.generate_anchors(cfg.TRACK_BASIC_SIZE, cfg.TRACK_RATIOS, cfg.TRACK_SCALES)
 K=len(cfg.RATIOS)*len(cfg.SCALES)
@@ -141,7 +141,7 @@ def main(dataset_obj, model=None):
                 anchors=G.gen_region_anchors(det_raw_anchors, dummy_search_box, bound, K=K, size=out_size)[0]
                 roidb['anchors']=anchors
 
-                bboxes_list, _=inference_track(model, roidb)
+                bboxes_list=inference_track(model, roidb)
                 last_temp_boxes=temp_boxes.copy()                
 
                 if not TRACK_LAST_FRAME and len(bboxes_list)>0:
@@ -193,19 +193,14 @@ def test_insert():
     print(combined_boxes)
     
 if __name__=='__main__':
-    model_path='./ckpt_mot/dl_mot_iter_260000.pkl'
+    model_path='./ckpt/dl_mot_epoch_7.pkl'
     cfg.PHASE='TEST'
     cfg.TRACK_SCORE_THRESH=0.1
     cfg.TRACK_MAX_DIST=30
-#    cfg.TEST.DATASET='detrac'
-#    dataset_obj=detrac.Detrac(im_width=im_width, im_height=im_height, name='Detrac')
-#    dataset_obj.choice('MVI_40201')
-    cfg.TEST.DATASET='mot'
-    dataset_obj=mot.MOT(im_width=im_width, im_height=im_height, name='MOT2017')
-    dataset_obj.choice('MOT17-02')
-#    dataset_obj=vot.VOT(im_width=im_width, im_height=im_height, name='VID')
-#    dataset_obj.choice('ILSVRC2015_train_00339003')
-#    dataset_obj.choice('hand')
+    cfg.TEST.DATASET='detrac'
+    dataset_obj=detrac.Detrac(im_width=im_width, im_height=im_height, name='Detrac')
+    dataset_obj.choice('MVI_40201')
+
     model=MotFRCNN(im_width, im_height, pretrained=False)
     model.load_weights(model_path)
     model.cuda()
