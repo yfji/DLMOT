@@ -20,8 +20,8 @@ from collections import OrderedDict
 from model.vgg16 import Vgg16
 import model.resnet as resnet
 import model.fpn as fpn
-import model.rpn as rpn
-from model.fast_rcnn import FastRCNN
+import model.myrpn as rpn
+from model.my_fast_rcnn import FastRCNN
 import rpn.util as U
 #from rpn.nms import nms
 from fast_rcnn.proposal_target import get_proposal_target
@@ -60,7 +60,7 @@ class MotFRCNN(nn.Module):
         super(MotFRCNN, self).__init__()
         
         self.rpn_out_ch=512
-        self.track_rpn_out_ch=512
+        self.track_rpn_out_ch=256
         self.features_out_ch=256
 
         self.fetch_config()

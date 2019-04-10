@@ -311,11 +311,13 @@ class TrainEngine(object):
                     '''
                     In CrossEntropyLoss, input is BCHW, target is BHW, NOT BCHW!!! 
                     '''
-                    track_num_examples=len(track_fg_anchor_inds)
+                    track_num_examples=0
                     detect_num_examples=0
+                    for fg_inds in track_fg_anchor_inds:
+                        track_num_examples+=len(fg_inds)
                     for fg_inds in detect_fg_anchor_inds:
                         detect_num_examples+=len(fg_inds)
-
+                        
                     num_fg_proposals=output_dict['num_fgs']
                     
                     track_denominator_rpn=track_num_examples if track_num_examples>0 else 1

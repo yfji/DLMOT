@@ -11,7 +11,7 @@ cfg = __C
 
 __C.PHASE='TRAIN'
 __C.OPTIMIZER='sgd'    #adam or sgd
-__C.GPU_ID=[0,1]
+__C.GPU_ID=[0]
 #__C.DATA_DIR='E:/yufji/DETRAC-train-data'
 __C.DATA_DIR='/mnt/sda7/DETRAC-train-data'
 __C.PRETRAINED_DIR='/home/yfji/Pretrained/pytorch'
@@ -24,17 +24,18 @@ __C.NUM_CLASSES=5
 
 __C.BASIC_SIZE=16
 __C.RATIOS=np.asarray([0.5,1,2])
-__C.SCALES=np.asarray([2,4,8,16])
+__C.SCALES=np.asarray([2,4,8])
 __C.DET_ROI_SIZE=14
 __C.TEMP_ROI_SIZE=5
 __C.FRCNN_ROI_SIZE=7
 
 __C.RPN_CONV_SIZE=__C.DET_ROI_SIZE-__C.TEMP_ROI_SIZE+1
 
-__C.TRACK_BASIC_SIZE=32
-__C.TRACK_RATIOS=np.asarray([0.5,1,2])
+__C.TRACK_BASIC_SIZE=16
+#__C.TRACK_RATIOS=np.asarray([0.5,1,2])
 #__C.TRACK_SCALES=np.asarray([2,4,8])
-__C.TRACK_SCALES=np.asarray([1,2,4])
+__C.TRACK_RATIOS=np.asarray([0.7,1.5])
+__C.TRACK_SCALES=np.asarray([2,4,8])
 
 ###Detection and track thresholds###
 __C.DET_SCORE_THRESH=0.7

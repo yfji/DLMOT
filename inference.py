@@ -247,9 +247,9 @@ if __name__=='__main__':
     cfg.TRACK_SCORE_THRESH=0
     cfg.TRACK_MAX_DIST=20
     cfg.TEMP_MAX_SIZE=min(im_width, im_height)
-    cfg.TEMP_NUM=3    
+    cfg.TEMP_NUM=4
     
-    model_path='./ckpt/dl_mot_epoch_7.pkl'
+    model_path='./ckpt/dl_mot_epoch_2.pkl'
     
     loader=DetracDataReader(im_width, im_height, batch_size=1)
     
@@ -257,12 +257,12 @@ if __name__=='__main__':
     model.load_weights(model_path)
     model.cuda()
     
-    roidb=loader.__getitem__(10)    
+    roidb=loader.__getitem__(40)    
     if len(roidb)==0:
         print('No targets, return')
     else:
         images=[roidb['temp_image'].squeeze().astype(np.uint8, copy=True), roidb['det_image'].squeeze().astype(np.uint8, copy=True)]
-        '''
+        
         outputs=inference_detect(model ,roidb)
         draw_detect_boxes(images, outputs, with_proposals=False)
         for img in images:
@@ -276,5 +276,6 @@ if __name__=='__main__':
         cv2.imshow('det', det_image)
         print('Track result has been written to result.jpg')
         cv2.waitKey()     
+        '''
         
             

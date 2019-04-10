@@ -17,8 +17,8 @@ from collections import OrderedDict
 from model.vgg16 import Vgg16
 import model.resnet as resnet
 import model.fpn as fpn
-import model.rpn as rpn
-from model.fast_rcnn import FastRCNN
+import model.myrpn as rpn
+from model.my_fast_rcnn import FastRCNN
 import rpn.util as U
 #from rpn.nms import nms
 from fast_rcnn.proposal_target import get_proposal_target
@@ -70,7 +70,7 @@ class MotFRCNN(nn.Module):
         super(MotFRCNN, self).__init__()
         
         self.rpn_out_ch=512
-        self.track_rpn_out_ch=512
+        self.track_rpn_out_ch=256
         self.features_out_ch=256
 
         self.fetch_config()
@@ -423,5 +423,10 @@ class MotFRCNN(nn.Module):
 
 if __name__=='__main__':
     model=MotFRCNN(100,100)
-#    torch.save(model.state_dict(), 'siamRPN.pkl')
+    torch.save(model.state_dict(), 'DLMOT.pkl')
+    torch.save(model.features.state_dict(), 'resnet.pkl')
+    torch.save(model.fpn.state_dict(), 'fpn.pkl')
+    torch.save(model.track_rpn.state_dict(), 'trackRPN.pkl')
+    torch.save(model.detect_rpn.state_dict(), 'detRPN.pkl')
+    torch.save(model.fastRCNN.state_dict(), 'fastRCNN.pkl')
     params=model.get_params({'backbone':0.1, 'task':0.5})
