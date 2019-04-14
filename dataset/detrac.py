@@ -17,7 +17,8 @@ class Detrac(Dataset):
             self.anno_dir = op.join(cfg.DATA_DIR, 'DETRAC-Train-Annotations-XML')        
 
         self.get_dataset()
-        assert len(self.dataset)==len(self.annotations), 'Dataset and annotations not uniformed'
+        if load_gt:
+             assert len(self.dataset)==len(self.annotations), 'Dataset and annotations not uniformed'
         self.index=0
 
     def get_dataset(self):

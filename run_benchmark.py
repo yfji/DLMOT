@@ -11,12 +11,12 @@ import rpn.generate_anchors as G
 from rpn.util import bbox_transform_inv, bbox_overlap_frcnn
 from rpn.template import get_template
 
-im_width=768
-im_height=448
+im_width=640
+im_height=384
 
 #CLASSES=['__background','person']
 CLASSES=['__background', 'car', 'van', 'bus', 'truck']
-MAX_TEMPLATE_SIZE=im_height
+MAX_TEMPLATE_SIZE=256
 
 colors = [ [0, 255, 255], [255, 85, 0], 
               [255, 170, 0], [255, 255, 0], 
@@ -31,7 +31,7 @@ colors = [ [0, 255, 255], [255, 85, 0],
               [255, 0, 0], [255, 85, 0], 
               [255, 170, 0], [255, 255, 0]]
 
-templates=get_template(min_size=64, max_size=im_height, num_templates=5)
+templates=get_template(min_size=64, max_size=MAX_TEMPLATE_SIZE, num_templates=5)
 det_raw_anchors=G.generate_anchors(cfg.BASIC_SIZE, cfg.RATIOS, cfg.SCALES)
 track_raw_anchors=G.generate_anchors(cfg.TRACK_BASIC_SIZE, cfg.TRACK_RATIOS, cfg.TRACK_SCALES)
 K=len(cfg.RATIOS)*len(cfg.SCALES)

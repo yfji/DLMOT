@@ -81,9 +81,11 @@ class TrainEngine(object):
         cfg.DATA_LOADER_METHOD='INTER_IMG'        
         cfg.STRIDE=self.stride
         cfg.TEMP_MIN_SIZE=64
-        cfg.TEMP_MAX_SIZE=min(self.im_h, self.im_w)
-        cfg.TEMP_NUM=4
-        cfg.GAIN=0.012
+        cfg.TEMP_MAX_SIZE=256
+        cfg.TEMP_NUM=5
+        cfg.GAIN=0.015
+        cfg.TRAIN.RPN_NMS_THRESH=0.7
+        cfg.NUM_CLASSES=5
 
     def fetch_config(self):
         self.basic_size=cfg.BASIC_SIZE
@@ -399,12 +401,9 @@ class TrainEngine(object):
             
 if __name__=='__main__':
     set_gpu_id()
-
     cfg.PHASE='TRAIN'
-    cfg.TRAIN.RPN_NMS_THRESH=0.7
-    cfg.NUM_CLASSES=5
 #    pretrained='./dl_mot_pretrained.pkl'
-    pretrained='./ckpt/dl_mot_epoch_12.pkl'
+    pretrained='./ckpt/dl_mot_epoch_2.pkl'
     engine=TrainEngine(backbone_pretrained=True)
     #engine.train(pretrained_model=pretrained)
     engine.train()

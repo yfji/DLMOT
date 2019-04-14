@@ -13,7 +13,10 @@ from rpn.template import get_template
 im_width=640
 im_height=384
 
-MAX_TEMPLATE_SIZE=im_height
+cfg.TEMP_MIN_SIZE=64
+cfg.TEMP_MAX_SIZE=256
+cfg.TEMP_NUM=5
+MAX_TEMPLATE_SIZE=cfg.TEMP_MAX_SIZE
 
 colors = [ [0, 255, 255], [255, 85, 0], 
               [255, 170, 0], [255, 255, 0], 
@@ -28,7 +31,7 @@ colors = [ [0, 255, 255], [255, 85, 0],
               [255, 0, 0], [255, 85, 0], 
               [255, 170, 0], [255, 255, 0]]
 
-templates=get_template(min_size=64, max_size=im_height, num_templates=3)
+templates=get_template(min_size=64, max_size=cfg.MAX_TEMPLATE_SIZE, num_templates=cfg.TEMP_NUM)
 det_raw_anchors=G.generate_anchors(cfg.BASIC_SIZE, cfg.RATIOS, cfg.SCALES)
 track_raw_anchors=G.generate_anchors(cfg.TRACK_BASIC_SIZE, cfg.TRACK_RATIOS, cfg.TRACK_SCALES)
 K=len(cfg.RATIOS)*len(cfg.SCALES)
@@ -193,11 +196,10 @@ def test_insert():
     print(combined_boxes)
     
 if __name__=='__main__':
-    model_path='./ckpt/dl_mot_epoch_7.pkl'
+    model_path='./ckpt/dl_mot_epoch_2.pkl'
     cfg.PHASE='TEST'
     cfg.TRACK_SCORE_THRESH=0.1
     cfg.TRACK_MAX_DIST=30
-    cfg.TEST.DATASET='detrac'
     dataset_obj=detrac.Detrac(im_width=im_width, im_height=im_height, name='Detrac')
     dataset_obj.choice('MVI_40201')
 

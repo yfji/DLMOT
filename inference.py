@@ -246,8 +246,8 @@ if __name__=='__main__':
     cfg.TEST.NMS_THRESH=0.6
     cfg.TRACK_SCORE_THRESH=0
     cfg.TRACK_MAX_DIST=20
-    cfg.TEMP_MAX_SIZE=min(im_width, im_height)
-    cfg.TEMP_NUM=4
+    cfg.TEMP_MAX_SIZE=256
+    cfg.TEMP_NUM=5
     
     model_path='./ckpt/dl_mot_epoch_2.pkl'
     

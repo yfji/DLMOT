@@ -37,7 +37,7 @@ class DetracDataReader(DataReader):
         self.num_visualize = 100
         self.permute_inds = np.random.permutation(np.arange(self.num_sequences))
 
-        self.max_interval=8 if cfg.PHASE=='TRAIN' else 1
+        self.max_interval=6 if cfg.PHASE=='TRAIN' else 1
         
         self.iter_stop=False
 
