@@ -17,18 +17,17 @@ from collections import OrderedDict
 from model.vgg16 import Vgg16
 import model.resnet as resnet
 import model.fpn as fpn
-import model.rpn as rpn
-from model.fast_rcnn import FastRCNN
+import model.myrpn as rpn
+from model.my_fast_rcnn import FastRCNN
 import rpn.util as U
 #from rpn.nms import nms
 from fast_rcnn.proposal_target import get_proposal_target
 from core.config import cfg
 
 from nms.nms_wrapper import nms
-from roialign.roi_align.crop_and_resize import CropAndResizeFunction
+from roi_align.functions.roi_align import RoIAlignFunction
+from time import time
 
-VGG_PRETRAINED_BN='/home/yfji/Pretrained/pytorch/vgg16_bn_features.pth'
-VGG_PRETRAINED='/home/yfji/Pretrained/pytorch/vgg16.pth'
 DEBUG=False
 
 def crop_and_resize(pool_size, feature_map, boxes, box_ind):
@@ -36,14 +35,9 @@ def crop_and_resize(pool_size, feature_map, boxes, box_ind):
         x1, y1, x2, y2, _= boxes.chunk(5, dim=1)
     else:
         x1, y1, x2, y2= boxes.chunk(4, dim=1)
-    im_h, im_w=feature_map.shape[2:4]
-    x1=x1/(float(im_w-1))
-    x2=x2/(float(im_w-1))
-    y1=y1/(float(im_h-1))
-    y2=y2/(float(im_h-1))
-
-    boxes = torch.cat((y1, x1, y2, x2), 1)
-    return CropAndResizeFunction(pool_size[0],pool_size[1],0)(feature_map, boxes, box_ind)
+    box_ind=box_ind.view(-1,1).float()
+    boxes = torch.cat((box_ind, x1, y1, x2, y2), 1)
+    return RoIAlignFunction(pool_size[0],pool_size[1], 1)(feature_map, boxes)
 
 def nms_cuda(boxes_np, nms_thresh=0.7, xyxy=True):    
     if xyxy:
@@ -51,41 +45,44 @@ def nms_cuda(boxes_np, nms_thresh=0.7, xyxy=True):
         boxes_np=np.hstack([y1,x1,y2,x2,scores])
     boxes_pth=torch.from_numpy(boxes_np).float().cuda()
     pick=nms(boxes_pth, nms_thresh)
+    pick=pick.cpu().data.numpy()
+#    print(pick)
     if len(pick.shape)==2:
-        pick=pick.cpu().data.numpy().squeeze()
+        pick=pick.squeeze(1)
     return pick
 
 class MotFRCNN(nn.Module):
     def __init__(self, im_width, im_height, pretrained=True):
         super(MotFRCNN, self).__init__()
-        self.det_roi_size=cfg.DET_ROI_SIZE
-        self.temp_roi_size=cfg.TEMP_ROI_SIZE
-        
-        self.frcnn_roi_size=cfg.FRCNN_ROI_SIZE
         
         self.rpn_out_ch=512
-        self.track_rpn_out_ch=512
+        self.track_rpn_out_ch=256
         self.features_out_ch=256
 
-        self.stride=cfg.STRIDE
-        self.K=len(cfg.RATIOS)*len(cfg.SCALES)
-        self.TK=len(cfg.TRACK_RATIOS)*len(cfg.TRACK_SCALES)
-
-        self.batch_size=cfg[cfg.PHASE].IMS_PER_BATCH
-        self.use_bn=not cfg.IMAGE_NORMALIZE
+        self.fetch_config()
 
         self.bound=(im_width, im_height)
         self.out_size=(im_width//self.stride, im_height//self.stride)
 
-        self.rpn_conv_size=self.det_roi_size-self.temp_roi_size+1
         self.num_anchors=self.K*(self.rpn_conv_size**2)
 
         self.fpn=fpn.FPN(self.features_out_ch)
         self.features=resnet.resnet50(pretrained=pretrained)
         self.make_rpn()
+        
+    def fetch_config(self):
+        self.det_roi_size=cfg.DET_ROI_SIZE
+        self.temp_roi_size=cfg.TEMP_ROI_SIZE
+        
+        self.frcnn_roi_size=cfg.FRCNN_ROI_SIZE
+        self.stride=cfg.STRIDE
+        self.K=len(cfg.RATIOS)*len(cfg.SCALES)
+        self.TK=len(cfg.TRACK_RATIOS)*len(cfg.TRACK_SCALES)
 
-#        self.co_kernels_cls=None
-#        self.co_kernels_bbox=None
+        self.use_bn=not cfg.IMAGE_NORMALIZE
+        self.rpn_conv_size=cfg.RPN_CONV_SIZE
+        self.batch_size=cfg[cfg.PHASE].IMS_PER_BATCH//len(cfg.GPU_ID)
+
         
     def load_weights(self, model_path=None):
         print('loading model from {}'.format(model_path))
@@ -94,8 +91,6 @@ class MotFRCNN(nn.Module):
         if 'epoch' in keys:
             print('Restoring model from self-defined ckpt')
             im_w, im_h=pretrained_dict['im_w'], pretrained_dict['im_h']
-            self.im_width=im_w
-            self.im_height=im_h
             print('Using resolution: {}x{}'.format(im_w,im_h))
             pretrained_dict=pretrained_dict['model']
         self.load_state_dict(pretrained_dict)
@@ -159,14 +154,11 @@ class MotFRCNN(nn.Module):
     
     def get_params(self, lr=None):
         backbone_params=[]
-        task_params=[]
-        
+        task_params=[]        
         for k, value in self.named_parameters():
             if 'features' in k and value.requires_grad:
-#                print('Resnet')
                 backbone_params.append(value)
             elif value.requires_grad:
-#                print('Task')
                 task_params.append(value)
         params=[{'key':'backbone','params':backbone_params, 'lr':lr['backbone'], 'momentum':0.9},
                 {'key':'task','params':task_params, 'lr':lr['task'], 'momentum':0.9}]
@@ -179,7 +171,6 @@ class MotFRCNN(nn.Module):
         boxes[:,3] = np.maximum(0, np.minimum(bound[1], boxes[:,3]))
 
     def gen_proposals(self, rpn_cls, rpn_bbox, anchors, batch_size):
-#        out_cls_softmax=self.rpn_cls_softmax(rpn_cls)
         out_cls_softmax=F.softmax(rpn_cls, dim=1)
         out_cls_np=out_cls_softmax.cpu().data.numpy()[:,1,:,:]
         out_cls_np=out_cls_np.reshape(batch_size, self.K, self.out_size[1], self.out_size[0]).transpose(0,2,3,1).reshape(-1, 1)
@@ -198,12 +189,11 @@ class MotFRCNN(nn.Module):
         proposals_batch=np.split(bbox_pred_with_cls, batch_size, axis=0)
         
         all_proposals=[]
-       
         for proposals in proposals_batch:
             if cfg.NMS:
                 order=np.argsort(proposals[:,-1])[::-1]
                 proposals_order=proposals[order[:cfg[cfg.PHASE].RPN_PRE_NMS_TOP_N]]
-                pick=nms_cuda(proposals_order, nms_thresh=0.7, xyxy=True)
+                pick=nms_cuda(proposals_order, cfg[cfg.PHASE].RPN_NMS_THRESH, xyxy=True)
                 
                 if len(pick)==0:
                     print('No pick in proposal nms')
@@ -213,7 +203,6 @@ class MotFRCNN(nn.Module):
                 all_proposals.append(proposals_nms)               
             else:
                 all_proposals.append(proposals)
-    
         '''list of all proposals of each box, not each frame'''
         return all_proposals
     
@@ -246,65 +235,76 @@ class MotFRCNN(nn.Module):
     '''Single object'''
 #    def forward(self, temp_image, det_image, temp_box, search_box):
     def forward(self, roidbs):
+        tic=time()
+        B=len(roidbs)
         temp_image_list= []
         det_image_list= []
-        temp_box_list = []
-        det_box_list = []
+        temp_box4det_list = []
+        det_box4det_list = []
+        temp_box_list=[]
+        det_box_list=[]
         search_box_list=[]
-        num_boxes=[]
+        temp_num_boxes=[]
+        det_num_boxes=[]
+        track_num_boxes=[]
         temp_classes_list=[]
         det_classes_list=[]
+
         for db in roidbs:
             temp_image_list.append(db['temp_image'])
             det_image_list.append(db['det_image'])
-            temp_box_list.append(db['temp_boxes'])
-            if db['det_boxes'] is not None:
-                det_box_list.append(db['det_boxes'])
-            if db['temp_classes'] is not None:
-                temp_classes_list.append(db['temp_classes'])
-            if db['det_classes'] is not None:
-                det_classes_list.append(db['det_classes'])            
+            temp_box4det_list.append(db['temp_boxes4det'])
+            det_box4det_list.append(db['det_boxes4det'])
+            temp_box_list.append(db['temp_boxes'])            
+            det_box_list.append(db['det_boxes'])
             search_box_list.append(db['search_boxes'])
-            num_boxes.append(db['temp_boxes'].shape[0])
+
+            temp_classes_list.append(db['temp_classes'])
+            det_classes_list.append(db['det_classes'])            
+            temp_num_boxes.append(db['temp_boxes4det'].shape[0])
+            det_num_boxes.append(db['det_boxes4det'].shape[0])
+            track_num_boxes.append(db['temp_boxes'].shape[0])
 
         '''detection anchors, the same for all roidb'''
         det_anchors=roidbs[0]['anchors']
 
-        n_boxes=sum(num_boxes)              
+        n_boxes=sum(track_num_boxes)              
         temp_image = np.concatenate(temp_image_list, axis=0).astype(np.float32)
         det_image = np.concatenate(det_image_list, axis=0).astype(np.float32)
              
-        temp_boxes=np.vstack(temp_box_list)
-        search_boxes=np.vstack(search_box_list)
-        self.temp_boxes=temp_boxes
-        if len(det_box_list)>0:
-            self.det_boxes=np.vstack(det_box_list)
-        if len(temp_classes_list)>0:
-            self.temp_classes=np.concatenate(temp_classes_list, 0)
-        if len(det_classes_list)>0:
-            self.det_classes=np.concatenate(det_classes_list, 0)        
-        self.search_boxes=search_boxes
-        self.num_boxes=num_boxes
-         #NHWC-->NCHW
+        self.temp_boxes=np.vstack(temp_box_list)
+        self.det_boxes=np.vstack(det_box_list)
+        
+        self.temp_boxes4det=np.vstack(temp_box4det_list)  
+        self.det_boxes4det=np.vstack(det_box4det_list)
+        self.temp_classes=np.concatenate(temp_classes_list, 0)
+        self.det_classes=np.concatenate(det_classes_list, 0)        
+        self.search_boxes=np.vstack(search_box_list)
+
+        #NHWC-->NCHW
         temp_image=Variable(torch.from_numpy(temp_image.transpose(0, 3, 1, 2)).cuda())
         det_image=Variable(torch.from_numpy(det_image.transpose(0, 3, 1, 2)).cuda())
-        
+        toc=time()
+        #print('Prepare data costs {}s'.format(toc-tic))
         z,x=self.fpn_out(temp_image, det_image)
 
-        batch_x=torch.cat([z,  x], 0)
+        batch_x=torch.cat([z,x], 0)
+        #batch_x=z
+        batch_size=2*B
+        temp_only=False
         if DEBUG:
             print('Batch feature map shape: ', end='');print(batch_x.shape)
         
-        temp_boxes = temp_boxes/(1.0*self.stride)
-        search_boxes = search_boxes/(1.0*self.stride)
+        temp_boxes = self.temp_boxes/(1.0*self.stride)
+        search_boxes = self.search_boxes/(1.0*self.stride)
         
         bound2=(x.shape[3], x.shape[2])
         self.clip_boxes(temp_boxes, bound2)
         self.clip_boxes(search_boxes, bound2)
         
-        '''siamese rpn begin'''
-        
-        box_inds=[i*np.ones(num_boxes[i], dtype=np.int32) for i in range(len(num_boxes))]
+        '''siamese rpn begin'''      
+        tic=time()  
+        box_inds=[i*np.ones(track_num_boxes[i], dtype=np.int32) for i in range(len(track_num_boxes))]
         box_inds=torch.from_numpy(np.concatenate(box_inds)).cuda()
         
         temp_boxes=torch.from_numpy(temp_boxes.astype(np.float32)).cuda()
@@ -344,12 +344,11 @@ class MotFRCNN(nn.Module):
         inds=torch.from_numpy(np.linspace(0,n_boxes**2-1,n_boxes)).long()
         track_rpn_logits=track_rpn_logits[inds].view(n_boxes,2,self.TK*self.rpn_conv_size,self.rpn_conv_size)
         track_rpn_bbox=track_rpn_bbox[inds].view(n_boxes,4*self.TK,self.rpn_conv_size,self.rpn_conv_size)
-        
-#        track_rpn_logits=track_rpn_logits.view(n_boxes,2,self.TK*self.rpn_conv_size,self.rpn_conv_size)
+        toc=time()
+        #print('SiamRPN costs {}s'.format(toc-tic))
         if DEBUG:
             print('track_rpn_logits shape: ',end='');print(track_rpn_logits.shape)    
             print('track_rpn_bbox shape: ',end='');print(track_rpn_bbox.shape)   
-#        track_rpn_logits=track_rpn_logits.view(1, 2, self.rpn_conv_size, self.rpn_conv_size)
         '''siamese rpn end'''
 
         '''Fast RCNN start'''
@@ -357,36 +356,31 @@ class MotFRCNN(nn.Module):
         #[2,4K,H,W]
         
         detect_rpn_logits, detect_rpn_bbox=self.detect_rpn(batch_x)        
-        detect_rpn_logits=detect_rpn_logits.view(2*self.batch_size, 2, self.K*self.out_size[1], self.out_size[0])
+        detect_rpn_logits=detect_rpn_logits.view(batch_size, 2, self.K*self.out_size[1], self.out_size[0])
+        tic=time()
+
+        all_proposals=self.gen_proposals(detect_rpn_logits, detect_rpn_bbox, det_anchors, batch_size)
+        toc=time()
+        #print('Gen proposal costs {}s'.format(toc-tic))
         
-        all_proposals=self.gen_proposals(detect_rpn_logits, detect_rpn_bbox, det_anchors, 2*self.batch_size)
-        
-        if cfg.PHASE=='TRAIN':
-            gt_boxes, gt_classes=U.get_boxes_classes_list(self.temp_boxes, self.det_boxes, self.temp_classes, self.det_classes, num_boxes)
-            proposals, proposal_cls_targets, proposal_bbox_targets, bbox_weights, labels=\
-                get_proposal_target(all_proposals, gt_boxes, gt_classes, 2*self.batch_size)
-            num_proposals_per_image=[]
-            num_fgs=0
-            for label in labels:
-                num_proposals_per_image.append(len(label))
-                fg_inds=np.where(label>0)[0]
-                num_fgs+=len(fg_inds)
-            
-            roi_features=self.get_rois(batch_x, proposals, num_proposals_per_image)
-            frcnn_logits, frcnn_probs, frcnn_bbox=self.fastRCNN(roi_features)
-            frcnn_bbox=torch.mul(frcnn_bbox, Variable(torch.from_numpy(bbox_weights).cuda(), requires_grad=False))
-        else:
-            num_proposals_per_box=[]
-            '''
-            if nms, proposals may not have the same number of each box
-            if not nms, each box has same number of proposals
-            '''
-            for prop in all_proposals:
-                num_proposals_per_box.append(prop.shape[0])
-            proposals=np.vstack(all_proposals)
-            roi_features=self.get_rois(batch_x, proposals, [len(proposals)])
-            frcnn_logits, frcnn_probs, frcnn_bbox=self.fastRCNN(roi_features)
-        
+        gt_boxes, gt_classes=U.get_boxes_classes_list(self.temp_boxes4det, \
+            self.det_boxes4det, self.temp_classes, self.det_classes, (temp_num_boxes, det_num_boxes), temp_only=temp_only)
+        tic=time()
+        proposals, proposal_cls_targets, proposal_bbox_targets, bbox_weights, labels=\
+            get_proposal_target(all_proposals, gt_boxes, gt_classes, batch_size)
+        toc=time()
+        #print('Proposal targets costs {}s'.format(toc-tic))
+        num_proposals_per_image=[]
+        num_fgs=0
+        for label in labels:
+            num_proposals_per_image.append(len(label))
+            fg_inds=np.where(label>0)[0]
+            num_fgs+=len(fg_inds)
+
+        roi_features=self.get_rois(batch_x, proposals, num_proposals_per_image)
+        frcnn_logits, frcnn_probs, frcnn_bbox=self.fastRCNN(roi_features)
+        frcnn_bbox=torch.mul(frcnn_bbox, Variable(torch.from_numpy(bbox_weights).cuda(), requires_grad=False))
+
         '''Fast-RCNN end'''
         output={}
         output['track_rpn_logits']=track_rpn_logits
@@ -395,17 +389,20 @@ class MotFRCNN(nn.Module):
         output['detect_rpn_bbox']=detect_rpn_bbox
         output['frcnn_bbox']=frcnn_bbox
         
-        if cfg.PHASE=='TRAIN':
-            output['frcnn_cls_target']=Variable(torch.from_numpy(proposal_cls_targets).long().cuda())
-            output['frcnn_bbox_target']=Variable(torch.from_numpy(proposal_bbox_targets).float().cuda())
-            output['num_proposals']=num_proposals_per_image
-            output['frcnn_logits']=frcnn_logits
-            output['num_fgs']=num_fgs
-            output['labels']=labels
-        else:
-            output['frcnn_probs']=frcnn_probs
-            output['proposals']=proposals
-            output['num_proposals']=num_proposals_per_box
+        output['frcnn_cls_target']=Variable(torch.from_numpy(proposal_cls_targets).long().cuda())
+        output['frcnn_bbox_target']=Variable(torch.from_numpy(proposal_bbox_targets).float().cuda())
+        output['num_proposals']=num_proposals_per_image
+        output['frcnn_logits']=frcnn_logits
+        output['num_fgs']=num_fgs
+        output['labels']=labels
+        output['gt_boxes']=gt_boxes
+        output['search_boxes']=self.search_boxes
+
+        output['num_boxes']=track_num_boxes
+        output['det_boxes']=self.det_boxes
+        output['temp_boxes']=self.temp_boxes
+        output['search_boxes']=self.search_boxes
+        output['B']=batch_size
 #        return out_cls, out_bbox, all_proposals
         return output
     

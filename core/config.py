@@ -13,24 +13,26 @@ __C.PHASE='TRAIN'
 __C.PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
 __C.IMAGE_NORMALIZE= False
 __C.GAIN=0.02
-__C.TEST_TYPE='RPN'
 __C.NMS=True
+__C.GPU_ID='1'
+__C.DATA_DIR='E:/yufji/DETRAC-train-data'
+__C.PRETRAINED_DIR='E:/yufji/Pretrained'
+__C.OPTIMIZER='sgd'
 
 __C.NUM_CLASSES=5
-__C.DATA_LOADER_METHOD='INTER_SEQ'
 
 __C.BASIC_SIZE=16
 __C.RATIOS=np.asarray([0.5,1,2])
-__C.SCALES=np.asarray([2,4,8,16])
+__C.SCALES=np.asarray([1.5,4,8,16])
 __C.DET_ROI_SIZE=14
 __C.TEMP_ROI_SIZE=5
 __C.FRCNN_ROI_SIZE=7
 
 __C.RPN_CONV_SIZE=__C.DET_ROI_SIZE-__C.TEMP_ROI_SIZE+1
 
-__C.TRACK_BASIC_SIZE=32
+__C.TRACK_BASIC_SIZE=16
 __C.TRACK_RATIOS=np.asarray([0.5,1,2])
-__C.TRACK_SCALES=np.asarray([1,2,4])
+__C.TRACK_SCALES=np.asarray([1.5,4,8,16])
 #__C.TRACK_SCALES=np.asarray([2,4,8])
 
 ###Detection and track thresholds###
@@ -62,7 +64,7 @@ __C.TRAIN.IMS_PER_BATCH = 2
 # Minibatch size (number of regions of interest [ROIs])
 __C.TRAIN.BATCH_SIZE = 256
 # Fraction of minibatch that is labeled foreground (i.e. class > 0)
-__C.TRAIN.FG_FRACTION = 0.5
+__C.TRAIN.FG_FRACTION = 0.333
 # Overlap threshold for a ROI to be considered foreground (if >= FG_THRESH)
 __C.TRAIN.FG_THRESH = 0.5
 # Overlap threshold for a ROI to be considered background (class = 0 if
@@ -90,9 +92,9 @@ __C.TRAIN.RPN_BATCHSIZE = 256
 # NMS threshold used on RPN proposals
 __C.TRAIN.RPN_NMS_THRESH = 0.7
 # Number of top scoring boxes to keep before apply NMS to RPN proposals
-__C.TRAIN.RPN_PRE_NMS_TOP_N = 20000
+__C.TRAIN.RPN_PRE_NMS_TOP_N = 12000
 # Number of top scoring boxes to keep after applying NMS to RPN proposals
-__C.TRAIN.RPN_POST_NMS_TOP_N = 8000
+__C.TRAIN.RPN_POST_NMS_TOP_N = 6000
 # Proposal height and width both need to be greater than RPN_MIN_SIZE (at orig image scale)
 __C.TRAIN.RPN_MIN_SIZE = 16
 

@@ -80,11 +80,6 @@ def calc_roi_align_shifts(search_box, size, bound):
     bin_size_w=1.0*w/size[0]
     bin_size_h=1.0*h/size[1]
     
-#    xstart=x+bin_size_w*0.5
-#    ystart=y+bin_size_h*0.5
-
-#    shift_x = np.asarray([xstart+bin_size_w*i for i in range(size[0])])
-#    shift_y = np.asarray([ystart+bin_size_h*i for i in range(size[1])])
     shift_x=np.linspace(x+bin_size_w*0.5, x+w-bin_size_w*0.5, size[0])
     shift_y=np.linspace(y+bin_size_h*0.5, y+h-bin_size_h*0.5, size[1])
 
@@ -108,6 +103,19 @@ def gen_region_anchors(_anchors, search_boxes, bound, K=9, size=None):
         box_anchors.append(anchors)
     return box_anchors
 
+def gen_template_anchors(_anchors, templates, K=9, size=None):
+    dummy_regions=np.zeros((templates.shape[0], 4))
+    dummy_regions[:,2]=templates[:,0]
+    dummy_regions[:,3]=templates[:,1]
+    
+    bound=(np.max(templates[:,0])+1, np.max(templates[:,1])+1)
+
+    box_anchors=gen_region_anchors(_anchors, dummy_regions, bound, K=K, size=size)
+
+    box_anchors=[anchors[np.newaxis,:,:] for anchors in box_anchors]
+    box_anchors=np.concatenate(box_anchors)
+    return box_anchors
+    
 if __name__=='__main__':
     anchors=generate_anchors()
     print(anchors)

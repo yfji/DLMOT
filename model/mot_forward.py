@@ -20,31 +20,41 @@ from collections import OrderedDict
 from model.vgg16 import Vgg16
 import model.resnet as resnet
 import model.fpn as fpn
-import model.rpn as rpn
-from model.fast_rcnn import FastRCNN
+import model.myrpn as rpn
+from model.my_fast_rcnn import FastRCNN
 import rpn.util as U
 #from rpn.nms import nms
 from fast_rcnn.proposal_target import get_proposal_target
 from core.config import cfg
 
 from nms.nms_wrapper import nms
-from roialign.roi_align.crop_and_resize import CropAndResizeFunction
+#from roialign.roi_align.crop_and_resize import CropAndResizeFunction
+from roi_align.functions.roi_align import RoIAlignFunction
 
 DEBUG=False
 
+# def crop_and_resize(pool_size, feature_map, boxes, box_ind):
+#     if boxes.shape[1]==5:
+#         x1, y1, x2, y2, _= boxes.chunk(5, dim=1)
+#     else:
+#         x1, y1, x2, y2= boxes.chunk(4, dim=1)
+#     im_h, im_w=feature_map.shape[2:4]
+#     x1=x1/(float(im_w-1))
+#     x2=x2/(float(im_w-1))
+#     y1=y1/(float(im_h-1))
+#     y2=y2/(float(im_h-1))
+
+#     boxes = torch.cat((y1, x1, y2, x2), 1)
+#     return CropAndResizeFunction(pool_size[0],pool_size[1],0)(feature_map, boxes, box_ind)
+# Windows version included
 def crop_and_resize(pool_size, feature_map, boxes, box_ind):
     if boxes.shape[1]==5:
         x1, y1, x2, y2, _= boxes.chunk(5, dim=1)
     else:
         x1, y1, x2, y2= boxes.chunk(4, dim=1)
-    im_h, im_w=feature_map.shape[2:4]
-    x1=x1/(float(im_w-1))
-    x2=x2/(float(im_w-1))
-    y1=y1/(float(im_h-1))
-    y2=y2/(float(im_h-1))
-
-    boxes = torch.cat((y1, x1, y2, x2), 1)
-    return CropAndResizeFunction(pool_size[0],pool_size[1],0)(feature_map, boxes, box_ind)
+    box_ind=box_ind.view(-1,1).float()
+    boxes = torch.cat((box_ind, x1, y1, x2, y2), 1)
+    return RoIAlignFunction(pool_size[0],pool_size[1], 1)(feature_map, boxes)
 
 def nms_cuda(boxes_np, nms_thresh=0.7, xyxy=True):    
     if xyxy:
@@ -61,30 +71,33 @@ def nms_cuda(boxes_np, nms_thresh=0.7, xyxy=True):
 class MotFRCNN(nn.Module):
     def __init__(self, im_width, im_height, pretrained=True):
         super(MotFRCNN, self).__init__()
-        self.det_roi_size=cfg.DET_ROI_SIZE
-        self.temp_roi_size=cfg.TEMP_ROI_SIZE
-        
-        self.frcnn_roi_size=cfg.FRCNN_ROI_SIZE
         
         self.rpn_out_ch=512
-        self.track_rpn_out_ch=512
+        self.track_rpn_out_ch=256
         self.features_out_ch=256
 
-        self.stride=cfg.STRIDE
-        self.K=len(cfg.RATIOS)*len(cfg.SCALES)
-        self.TK=len(cfg.TRACK_RATIOS)*len(cfg.TRACK_SCALES)
-
-        self.use_bn=not cfg.IMAGE_NORMALIZE
+        self.fetch_config()
 
         self.bound=(im_width, im_height)
         self.out_size=(im_width//self.stride, im_height//self.stride)
 
-        self.rpn_conv_size=self.det_roi_size-self.temp_roi_size+1
         self.num_anchors=self.K*(self.rpn_conv_size**2)
 
         self.fpn=fpn.FPN(self.features_out_ch)
         self.features=resnet.resnet50(pretrained=pretrained)
         self.make_rpn()
+        
+    def fetch_config(self):
+        self.det_roi_size=cfg.DET_ROI_SIZE
+        self.temp_roi_size=cfg.TEMP_ROI_SIZE
+        
+        self.frcnn_roi_size=cfg.FRCNN_ROI_SIZE
+        self.stride=cfg.STRIDE
+        self.K=len(cfg.RATIOS)*len(cfg.SCALES)
+        self.TK=len(cfg.TRACK_RATIOS)*len(cfg.TRACK_SCALES)
+
+        self.use_bn=not cfg.IMAGE_NORMALIZE
+        self.rpn_conv_size=cfg.RPN_CONV_SIZE
         
     def load_weights(self, model_path=None):
         print('loading model from {}'.format(model_path))
@@ -93,8 +106,6 @@ class MotFRCNN(nn.Module):
         if 'epoch' in keys:
             print('Restoring model from self-defined ckpt')
             im_w, im_h=pretrained_dict['im_w'], pretrained_dict['im_h']
-            self.im_width=im_w
-            self.im_height=im_h
             print('Using resolution: {}x{}'.format(im_w,im_h))
             pretrained_dict=pretrained_dict['model']
         self.load_state_dict(pretrained_dict)
@@ -143,7 +154,7 @@ class MotFRCNN(nn.Module):
             if cfg.NMS:
                 order=np.argsort(proposals[:,-1])[::-1]
                 proposals_order=proposals[order[:cfg[cfg.PHASE].RPN_PRE_NMS_TOP_N]]
-                pick=nms_cuda(proposals_order, nms_thresh=0.7, xyxy=True)
+                pick=nms_cuda(proposals_order, nms_thresh=cfg[cfg.PHASE].RPN_NMS_THRESH, xyxy=True)
                 
                 if len(pick)==0:
                     print('No pick in proposal nms')

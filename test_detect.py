@@ -9,8 +9,8 @@ from inference import CLASSES, inference_detect
 import roidb.box_utils as butil
 import rpn.generate_anchors as G
 
-im_width=768
-im_height=448
+im_width=640
+im_height=384
 
 colors = [ [0, 255, 255], [255, 85, 0], 
               [255, 170, 0], [255, 255, 0], 
@@ -62,12 +62,12 @@ def main(dataset_obj, model=None):
             break
 
 if __name__=='__main__':
-    model_path='./ckpt/dl_mot_iter_800000.pkl'
+    model_path='./ckpt/dl_mot_epoch_2.pkl'
     cfg.PHASE='TEST'
-    cfg.DET_SCORE_THRESH=0.9
+    cfg.DET_SCORE_THRESH=0.1
     cfg.TEST.RPN_NMS_THRESH=0.6
     cfg.TEST.DATASET='detrac'
-    dataset_obj=detrac.Detrac(im_width=im_width, im_height=im_height, name='Detrac')
+    dataset_obj=detrac.Detrac(im_width=im_width, im_height=im_height, name='Detrac',load_gt=False)
     dataset_obj.choice('MVI_40192')
     model=MotFRCNN(im_width, im_height, pretrained=False)
     model.load_weights(model_path)

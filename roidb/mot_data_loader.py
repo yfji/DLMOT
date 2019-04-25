@@ -50,7 +50,7 @@ class MOTDataLoader(object):
         self.num_images=0
         self.num_visualize = 100
         
-        self.permute_inds = np.random.permutation(np.arange(self.num_sequences))
+        self.inds = np.random.permutation(np.arange(self.num_sequences))
 
         self.im_w = im_width
         self.im_h = im_height
@@ -128,13 +128,13 @@ class MOTDataLoader(object):
             return None
         
         roidbs=[]
-        index=self.permute_inds[self.index]
+        index=self.inds[self.index]
         
         while self.index_per_seq[index]>self.upper_bound_per_seq[index]:
             self.index+=1
             if self.index==self.num_sequences:
                 self.index=0
-            index=self.permute_inds[self.index]
+            index=self.inds[self.index]
             
         img_dir=op.join(self.mot_dir, MOT_SUBDIRS[index], 'img1') 
         annotation=self.gt_annotations[MOT_SUBDIRS[index]]
@@ -226,43 +226,47 @@ class MOTDataLoader(object):
                 '''NHWC'''
                 bound=(det_image.shape[2], det_image.shape[1])
                 search_boxes=np.zeros((0,4),dtype=np.float32)
+                
+                num_fg_anchors=-1
+                best_track_anchors=None
+                best_ind=0
 
                 for i, box in enumerate(ref_boxes_align):
-#                    if box[2]-box[0]<MAX_TEMPLATE_SIZE-1 and box[3]-box[1]<MAX_TEMPLATE_SIZE-1:
                     if cfg.PHASE=='TEST':
                         _,search_box=butil.best_search_box_test(self.templates, box, bound)
                     else:
-                        search_box,_,_=butil.best_search_box_train(box, det_boxes_align[i], self.templates, self.track_raw_anchors, bound, self.TK, (self.rpn_conv_size, self.rpn_conv_size), cfg.TRAIN.TRACK_RPN_POSITIVE_THRESH)
+                        search_box, max_overlap_num, best_anchors=butil.best_search_box_train(box, det_boxes_align[i], self.templates, self.track_raw_anchors, bound, self.TK, (self.rpn_conv_size, self.rpn_conv_size), cfg.TRAIN.TRACK_RPN_POSITIVE_THRESH)                            
+                                            
+                        if max_overlap_num>num_fg_anchors:
+                            num_fg_anchors=max_overlap_num
+                            best_track_anchors=best_anchors
+                            best_ind=i
+
                     search_boxes=np.append(search_boxes, search_box.reshape(1,-1), 0)
                     good_inds.append(i)
-#                    else:
-#                        search_boxes=np.append(search_boxes, np.array([[0,0,0,0]]), 0)
                 roidb['search_boxes']=search_boxes
                 roidb['bound']=bound
                 roidb['good_inds']=good_inds
 
-                track_anchors=G.gen_region_anchors(self.track_raw_anchors, search_boxes, bound, K=self.TK, size=(self.rpn_conv_size,self.rpn_conv_size)) 
-                '''track anchors'''
-                roidb['track_anchors']=track_anchors
-                bbox_overlaps=U.bbox_overlaps_per_image(np.vstack(track_anchors), det_boxes_align, branch='rpn')
-                roidb['bbox_overlaps']=bbox_overlaps                                                   
+                if cfg.PHASE=='TRAIN':
+                    roidb['best_anchors']=best_track_anchors
+                    roidb['best_ind']=best_ind                                        
             
                 dummy_search_box=np.array([[0,0,self.im_w-1,self.im_h-1]])
                 anchors=G.gen_region_anchors(self.raw_anchors, dummy_search_box, bound, K=self.K, size=self.out_size)
-                '''detection anchors'''
+                '''detectio anchors'''
                 roidb['anchors']=anchors[0]
                 roidbs.append(roidb)           
         '''
         [NHWC,NHWC]
         '''
         self.index_per_seq[index] += self.batch_size
-        index_res=self.index_per_seq-self.upper_bound_per_seq
-        index_res=index_res[self.permute_inds]
-        valid_seq_inds=np.where(index_res<=0)[0]
-        if valid_seq_inds.size==0:
+        index_res=self.index_per_seq[self.inds]-self.upper_bound_per_seq[self.inds]
+        self.valid_seq_inds=np.nonzero(index_res<=0)[0]
+        if self.valid_seq_inds.size==0:
             self.index_per_seq=np.zeros(self.num_sequences, dtype=np.int32)
             self.round_per_seq=np.zeros(self.num_sequences, dtype=np.int32)
-            self.permute_inds = np.random.permutation(np.arange(self.num_sequences))
+            self.inds = np.random.permutation(np.arange(self.num_sequences))
             self.index=0
             self.iter_stop=True
         else:    
@@ -270,20 +274,13 @@ class MOTDataLoader(object):
             if self.index==self.num_sequences:
                 self.index=0
         
-        '''
-        Fucking MOT dataset with too many frames in which there's no target
-        '''
-        if len(roidbs)>0 and len(roidbs)<self.batch_size:
-            top_n=len(roidbs)
-            print('Pad roidbs with previous elements. From {} to {}'.format(top_n, self.batch_size))
-            m=self.batch_size//len(roidbs)-1
-            n=self.batch_size%len(roidbs)
-            for i in range(m):
-                roidbs.extend(roidbs[:top_n])
-            if n>0:
-                roidbs.extend(roidbs[:n])
-            assert len(roidbs)==self.batch_size, 'roidbs length is not valid: {}/{}'.format(len(roidbs), self.batch_size)
-        return roidbs
+        if self.batch_size==1:
+            if len(roidbs)==0:
+                return {}
+            else:
+                return roidbs[0]
+        else:
+            return roidbs
     
 if __name__=='__main__':
     loader=MOTDataLoader(100,100,1)

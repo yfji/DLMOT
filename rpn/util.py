@@ -3,8 +3,8 @@ import numpy as np
 DEBUG=True
 
 def bbox_overlap_rpn(anchors, boxes):
-    n_anchor=len(anchors)
-    n_boxes=len(boxes)
+    n_anchor=anchors.shape[0]
+    n_boxes=boxes.shape[0]
     bbox_overlaps=np.zeros((n_anchor, n_boxes), dtype=np.float32)
     anchors_per_box=np.split(anchors, n_boxes, axis=0)
     starts=np.split(np.arange(len(anchors)),n_boxes, axis=0)
@@ -37,30 +37,24 @@ def bbox_overlap_rpn(anchors, boxes):
     return bbox_overlaps
 
 def bbox_overlap_frcnn(anchors, boxes):
-    n_anchor=len(anchors)
-    n_boxes=len(boxes)
+    n_anchor=anchors.shape[0]
+    n_boxes=boxes.shape[0]
     
 #    print(anchors[:10])
     bbox_overlaps=np.zeros((n_anchor, n_boxes), dtype=np.float32)
-    anchor_xmins=anchors[:,0]
-    anchor_ymins=anchors[:,1]
-    anchor_ws=anchors[:,2]-anchor_xmins+1
-    anchor_hs=anchors[:,3]-anchor_ymins+1
+    x1=anchors[:,0]
+    y1=anchors[:,1]
+    anchor_ws=anchors[:,2]-x1+1
+    anchor_hs=anchors[:,3]-y1+1
 
     anchor_areas=anchor_ws*anchor_hs
-    
-    if DEBUG:
-        invalid_inds=np.where(np.bitwise_or(anchor_ws<=0, anchor_hs<=0)==1)[0]
-        if len(invalid_inds)>0:
-            print('Invalid anchors')
-            print(anchors[invalid_inds])
             
     for i, box in enumerate(boxes):
         if not np.any(box):
             bbox_overlaps[:,i]=0.0
         else:
-            xmin=np.maximum(anchor_xmins,box[0])
-            ymin=np.maximum(anchor_ymins,box[1])
+            xmin=np.maximum(x1,box[0])
+            ymin=np.maximum(y1,box[1])
             xmax=np.minimum(anchors[:,2],box[2])
             ymax=np.minimum(anchors[:,3],box[3])
             
@@ -70,8 +64,6 @@ def bbox_overlap_frcnn(anchors, boxes):
             
             box_area=(box[2]-box[0]+1)*(box[3]-box[1]+1)
             union_areas=anchor_areas+box_area-intersec
-    #        anchor_areas=np.minimum(box_area, anchor_ws*anchor_hs)
-    #        anchor_areas=anchor_ws*anchor_hs
             overlap=1.0*intersec/union_areas
             
             bbox_overlaps[:,i]=overlap[...]
@@ -95,20 +87,29 @@ def bbox_overlaps_batch(anchors, boxes, num_boxes, branch='frcnn'):
         start+=box_size
     return bbox_overlaps_batch
 
-def get_boxes_classes_list(temp_boxes, det_boxes, temp_classes, det_classes, num_boxes):
+def get_boxes_classes_list(temp_boxes, det_boxes, temp_classes, det_classes, num_boxes, temp_only=False):
     start=0
     temp_boxes_list=[]
     det_boxes_list=[]
     temp_classes_list=[]
     det_classes_list=[]
-    for i, box_size in enumerate(num_boxes):
+    for i, box_size in enumerate(num_boxes[0]):
         left=start
         right=start+box_size
         temp_boxes_list.append(temp_boxes[left:right])
-        det_boxes_list.append(det_boxes[left:right])
         temp_classes_list.append(temp_classes[left:right])
+        start+=box_size
+    if temp_only:
+        return temp_boxes_list, temp_classes_list
+
+    start=0
+    for i, box_size in enumerate(num_boxes[1]):
+        left=start
+        right=start+box_size
+        det_boxes_list.append(det_boxes[left:right])
         det_classes_list.append(det_classes[left:right])
         start+=box_size
+        
     return temp_boxes_list+det_boxes_list, temp_classes_list+det_classes_list
     
 def bbox_transform(rois, gt_rois):
