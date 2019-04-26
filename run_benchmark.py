@@ -3,7 +3,7 @@ import numpy as np
 import cv2
 from model.mot_forward import nms_cuda, MotFRCNN
 from core.config import cfg
-from dataset import detrac,vid,vot,mot,kitti,video
+from dataset import Detrac,KITTI,Video
 from dataset.data_loader import DataLoader
 from inference import CLASSES, get_detect_output, get_track_output
 import roidb.box_utils as butil
@@ -11,10 +11,10 @@ import rpn.generate_anchors as G
 from rpn.util import bbox_transform_inv, bbox_overlap_frcnn
 from rpn.template import get_template
 
-im_width=768
-im_height=448
+im_width=640
+im_height=384
 
-MAX_TEMPLATE_SIZE=im_height
+MAX_TEMPLATE_SIZE=300
 
 colors = [ [0, 255, 255], [255, 85, 0], 
               [255, 170, 0], [255, 255, 0], 
@@ -29,24 +29,34 @@ colors = [ [0, 255, 255], [255, 85, 0],
               [255, 0, 0], [255, 85, 0], 
               [255, 170, 0], [255, 255, 0]]
 
-templates=get_template(min_size=64, max_size=im_height, num_templates=5)
-det_raw_anchors=G.generate_anchors(cfg.BASIC_SIZE, cfg.RATIOS, cfg.SCALES)
-track_raw_anchors=G.generate_anchors(cfg.TRACK_BASIC_SIZE, cfg.TRACK_RATIOS, cfg.TRACK_SCALES)
-K=len(cfg.RATIOS)*len(cfg.SCALES)
-TK=len(cfg.TRACK_RATIOS)*len(cfg.TRACK_SCALES)
-rpn_conv_size=cfg.RPN_CONV_SIZE
-bound=(im_width, im_height)
-out_size=(im_width//8, im_height//8)
+def load_parameters(model, model_path=None):
+    model.load_weights(model_path=model_path)
+    params={}
+    params['templates']=get_template(min_size=cfg.TEMP_MIN_SIZE, max_size=cfg.TEMP_MAX_SIZE, num_templates=cfg.TEMP_NUM)
+    print('Using templates:')
+    print(params['templates'])
+    params['K']=len(cfg.RATIOS)*len(cfg.SCALES)
+    params['TK']=len(cfg.TRACK_RATIOS)*len(cfg.TRACK_SCALES)
+    params['rpn_conv_size']=cfg.RPN_CONV_SIZE
+    params['bound']=(im_width, im_height)
+    params['out_size']=(im_width//8, im_height//8)
 
-dummy_search_box=np.array([[0,0,im_width-1,im_height-1]])
-det_anchors=G.gen_region_anchors(det_raw_anchors, dummy_search_box, bound, K=K, size=out_size)[0]
+    track_raw_anchors=G.generate_anchors(cfg.TRACK_BASIC_SIZE, cfg.TRACK_RATIOS, cfg.TRACK_SCALES)
+    params['track_raw_anchors']=track_raw_anchors
+    dummy_search_box=np.array([[0,0,im_width-1,im_height-1]])
+    det_raw_anchors=G.generate_anchors(cfg.BASIC_SIZE, cfg.RATIOS, cfg.SCALES)
 
-configs={}
-configs['K']=TK
-configs['search_boxes']=None
-configs['rpn_conv_size']=rpn_conv_size
-configs['raw_anchors']=track_raw_anchors
-configs['bound']=bound
+    anchors=G.gen_region_anchors(det_raw_anchors, dummy_search_box, params['bound'], K=params['K'], size=params['out_size'])[0]
+    params['anchors']=anchors
+    
+    configs={}
+    configs['K']=params['TK']
+    configs['search_boxes']=None
+    configs['rpn_conv_size']=params['rpn_conv_size']
+    configs['raw_anchors']=params['track_raw_anchors']
+    configs['bound']=params['bound']
+
+    return params, configs
 
 def add_new_targets(ids, boxes, new_boxes):
     combined_ids=ids.copy()
@@ -86,17 +96,17 @@ def sort_boxes(track_boxes, det_boxes):
     temp_boxes=np.append(track_boxes, det_boxes[new_target_inds], 0)
     return temp_boxes
 
-def detect_track(model, temp_image, det_image, temp_boxes, roidb=None):
+def detect_track(model, temp_image, det_image, temp_boxes, roidb=None, params=None, configs=None):
     if roidb is None:
         roidb={}
-    roidb['bound']=bound
+    roidb['bound']=params['bound']
     roidb['temp_image']=temp_image[np.newaxis,:,:,:].astype(np.float32)
     roidb['det_image']=det_image[np.newaxis,:,:,:].astype(np.float32)
     roidb['good_inds']=check_boxes(temp_boxes)
     roidb['temp_boxes']=temp_boxes
     search_boxes=[]
     for temp_box in temp_boxes:
-        _,best_template=butil.best_search_box_test(templates, temp_box, bound)
+        _,best_template=butil.best_search_box_test(params['templates'], temp_box, params['bound'])
         search_boxes.append(best_template)
     
     search_boxes=np.array(search_boxes)
@@ -104,7 +114,7 @@ def detect_track(model, temp_image, det_image, temp_boxes, roidb=None):
     roidb['det_classes']=None
     roidb['temp_classes']=None
     roidb['search_boxes']=search_boxes
-    roidb['anchors']=det_anchors
+    roidb['anchors']=params['anchors']
 
     output_dict=model(roidb, task='all')
     configs['search_boxes']=search_boxes
@@ -140,7 +150,7 @@ def cls_bboxes_to_boxes(cls_bboxes):
         temp_boxes=np.append(temp_boxes, bboxes[valid_inds], 0) 
     return temp_boxes
 
-def main(dataset_obj, model):
+def main(dataset_obj, model, params, configs):
     loader=DataLoader(dataset_obj)
 
     temp_boxes=None
@@ -153,12 +163,8 @@ def main(dataset_obj, model):
     det_interval=30
 
     roidb={}
-    roidb['bound']=bound
-    roidb['temp_classes']=None
-    roidb['det_classes']=None
-    roidb['temp_boxes']=None
-    roidb['det_boxes']=None
-    roidb['anchors']=det_anchors
+    roidb['bound']=params['bound']
+    roidb['anchors']=params['anchors']
 
 #    writer=cv2.VideoWriter('./self_video.avi', cv2.VideoWriter_fourcc('M','J','P','G'),30.0,(im_width, im_height))
     for idx, image in enumerate(loader):
@@ -186,16 +192,13 @@ def main(dataset_obj, model):
             
             search_boxes=[]
             for temp_box in temp_boxes:
-                _,best_template=butil.best_search_box_test(templates, temp_box, bound)
+                _,best_template=butil.best_search_box_test(params['templates'], temp_box, params['bound'])
                 search_boxes.append(best_template)
             
             search_boxes=np.array(search_boxes)
-            roidb['det_boxes']=None
-            roidb['det_classes']=None
-            roidb['temp_classes']=None
             roidb['search_boxes']=search_boxes
             
-            det_ret, track_ret=detect_track(model, temp_image, det_image, temp_boxes, roidb)
+            det_ret, track_ret=detect_track(model, temp_image, det_image, temp_boxes, roidb, params=params, configs=configs)
             '''do something with det_ret'''
             bboxes_list=track_ret['bboxes_list']
             valid_boxes=np.zeros((0,4), dtype=np.float32)
@@ -264,31 +267,25 @@ if __name__=='__main__':
     cfg.TRACK_MAX_DIST=20
     cfg.TEST.RPN_NMS_THRESH=0.6
 
-    dataset='mot'
+    dataset='detrac'
     dataset_obj=None
     model_path=None
     if dataset=='detrac':
-        model_path='./ckpt/dl_mot_iter_800000.pkl'
-        dataset_obj=detrac.Detrac(im_width=im_width, im_height=im_height, name='DETRAC')
-        dataset_obj.choice('MVI_39931')
+        model_path='./ckpt/dl_mot_epoch_6.pkl'
+        dataset_obj=Detrac(im_width=im_width, im_height=im_height, name='DETRAC', load_gt=False)
+        dataset_obj.choice('MVI_39761')
 #        dataset_obj.choice('MVI_40201')        
     elif dataset=='kitti':
         model_path='./ckpt/dl_mot_iter_800000.pkl'
-        dataset_obj=kitti.KITTI(im_width=im_width, im_height=im_height, name='KITTI')
+        dataset_obj=KITTI(im_width=im_width, im_height=im_height, name='KITTI')
         dataset_obj.choice('0000')
-    
-    elif dataset=='mot':
-        cfg.NUM_CLASSES=2
-        model_path='./ckpt_mot/dl_mot_iter_60000.pkl'
-        dataset_obj=mot.MOT(im_width=im_width, im_height=im_height, name='MOT2017')
-        dataset_obj.choice('MOT17-02')
 
     elif dataset=='video':
-        dataset_obj=video.Video(im_width=im_width, im_height=im_height, name='VIDEO')
+        dataset_obj=Video(im_width=im_width, im_height=im_height, name='VIDEO')
         dataset_obj.choice('beisanhuan.mp4')
     
     model=MotFRCNN(im_width, im_height, pretrained=False)
-    model.load_weights(model_path)
+    params, configs=load_parameters(model, model_path=model_path)
     model.cuda()
     
-    main(dataset_obj, model=model)
+    main(dataset_obj, model, params, configs)

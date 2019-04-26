@@ -33,7 +33,7 @@ class DetracDataReader(DataReader):
 
         self.index = 0        
         self.num_sequences = len(self.anno_files)
-        choice_inds=np.random.choice(np.arange(self.num_sequences), size=10, replace=False)
+        choice_inds=np.random.choice(np.arange(self.num_sequences), size=30, replace=False)
         self.anno_files=[self.anno_files[i] for i in choice_inds]
         self.img_dirs=[self.img_dirs[i] for i in choice_inds]
         self.num_sequences=choice_inds.size
@@ -124,41 +124,41 @@ class DetracDataReader(DataReader):
                         
             targets=self.annotations[self.start_per_seq[seq_index]+ind]
             for obj in targets:
-                    attribs=obj.attrib
-                    obj_id = int(attribs['id'])
+                attribs=obj.attrib
+                obj_id = int(attribs['id'])
 
-                    bbox = np.zeros(4, dtype=np.float32)
+                bbox = np.zeros(4, dtype=np.float32)
 
-                    bbox_attribs=obj.find('box').attrib
-                    attribute_attribs=obj.find('attribute').attrib
-                    cat=attribute_attribs['vehicle_type']
-                    if cat=='others':
-                        cat='truck'
-                    cat_ind=CAT_IND_MAP[cat]
+                bbox_attribs=obj.find('box').attrib
+                attribute_attribs=obj.find('attribute').attrib
+                cat=attribute_attribs['vehicle_type']
+                if cat=='others':
+                    cat='truck'
+                cat_ind=CAT_IND_MAP[cat]
 
-                    left=float(bbox_attribs['left'])
-                    top=float(bbox_attribs['top'])
-                    width=float(bbox_attribs['width'])
-                    height=float(bbox_attribs['height'])
+                left=float(bbox_attribs['left'])
+                top=float(bbox_attribs['top'])
+                width=float(bbox_attribs['width'])
+                height=float(bbox_attribs['height'])
 
-                    bbox[0]=left
-                    bbox[1]=top
-                    bbox[2]=left+width-1
-                    bbox[3]=top+height-1
+                bbox[0]=left
+                bbox[1]=top
+                bbox[2]=left+width-1
+                bbox[3]=top+height-1
 
-                    bbox[[0,2]]*=xscale
-                    bbox[[1,3]]*=yscale
+                bbox[[0,2]]*=xscale
+                bbox[[1,3]]*=yscale
 
-                    bbox=butil.clip_bboxes(bbox.reshape(1,4), self.im_w, self.im_h)
+                bbox=butil.clip_bboxes(bbox.reshape(1,4), self.im_w, self.im_h)
 
-                    if ind==ref_ind:
-                        temp_boxes[obj_id]=bbox
-                        temp_boxes4det=np.append(temp_boxes4det, bbox.reshape(1,4), 0)
-                        temp_gt_classes=np.append(temp_gt_classes, cat_ind)
-                    else:
-                        det_boxes[obj_id]=bbox
-                        det_boxes4det=np.append(det_boxes4det, bbox.reshape(1,4), 0)   
-                        det_gt_classes=np.append(det_gt_classes, cat_ind)                    
+                if ind==ref_ind:
+                    temp_boxes[obj_id]=bbox
+                    temp_boxes4det=np.append(temp_boxes4det, bbox.reshape(1,4), 0)
+                    temp_gt_classes=np.append(temp_gt_classes, cat_ind)
+                else:
+                    det_boxes[obj_id]=bbox
+                    det_boxes4det=np.append(det_boxes4det, bbox.reshape(1,4), 0)   
+                    det_gt_classes=np.append(det_gt_classes, cat_ind)                    
 
             if ind==ref_ind and len(temp_boxes.keys())>0:
                 temp_image=image[np.newaxis, :,:,:].astype(np.float32)
@@ -178,6 +178,9 @@ class DetracDataReader(DataReader):
                 if box[2]-box[0]<self.MAX_TEMPLATE_SIZE-1 and box[3]-box[1]<self.MAX_TEMPLATE_SIZE-1:
                     if cfg.PHASE=='TEST':
                         _,search_box=butil.best_search_box_test(self.templates, box, self.bound)
+                        search_boxes=np.append(search_boxes, search_box.reshape(1,-1), 0)
+                        good_inds.append(i)
+                        temp_box_ok=True
                     else:
                         ret=butil.best_search_box_random(box, \
                              det_boxes_align[i], self.templates, self.template_anchors, \

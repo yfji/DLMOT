@@ -107,9 +107,6 @@ class TrainEngine(object):
         epoch=ckpt['epoch']
         iters=ckpt['iters']
         lr=ckpt['lr']
-        cfg.TEMP_MIN_SIZE=ckpt['temp_min_size']
-        cfg.TEMP_MAX_SIZE=ckpt['temp_max_size']
-        cfg.TEMP_NUM=ckpt['temp_num']
         stepvalues=ckpt['stepvalues']
         msg='Restoring from {}\nStart epoch: {}, total iters: {}, current lr: {}'.format(ckpt_path,\
               epoch, iters, lr)

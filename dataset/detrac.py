@@ -12,9 +12,9 @@ class Detrac(Dataset):
         super(Detrac, self).__init__(im_width=im_width, im_height=im_height, name=name, load_gt=load_gt)
 
         print('Using benchmark {}'.format(self.dataset_name))
-        self.data_dir = op.join(cfg.DATA_DIR, 'Insight-MVT_Annotation_Train')
+        self.data_dir = op.join(cfg.DATA_DIR, 'Insight-MVT_Annotation_Val')
         if self.load_gt:
-            self.anno_dir = op.join(cfg.DATA_DIR, 'DETRAC-Train-Annotations-XML')        
+            self.anno_dir = op.join(cfg.DATA_DIR, 'DETRAC-Val-Annotations-XML')        
 
         self.get_dataset()
         if load_gt:

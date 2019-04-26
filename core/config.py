@@ -14,9 +14,9 @@ __C.PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
 __C.IMAGE_NORMALIZE= False
 __C.GAIN=0.02
 __C.NMS=True
-__C.GPU_ID='1'
-__C.DATA_DIR='E:/yufji/DETRAC-train-data'
-__C.PRETRAINED_DIR='E:/yufji/Pretrained'
+__C.GPU_ID='0'
+__C.DATA_DIR='/mnt/sda7/DETRAC-train-data'
+__C.PRETRAINED_DIR='/home/yfji/Pretrained/pytorch'
 __C.OPTIMIZER='sgd'
 
 __C.NUM_CLASSES=5
@@ -111,6 +111,7 @@ __C.TEST.MAX_SIZE = 1000
 __C.TEST.NMS = 0.3
 ## NMS threshold used on RPN proposals
 __C.TEST.RPN_NMS_THRESH = 0.8
+__C.TEST.NMS_THRESH=0.8
 ## Number of top scoring boxes to keep before apply NMS to RPN proposals
 __C.TEST.RPN_PRE_NMS_TOP_N = 6000
 ## Number of top scoring boxes to keep after applying NMS to RPN proposals

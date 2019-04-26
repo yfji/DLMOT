@@ -86,14 +86,18 @@ class MotFRCNN(nn.Module):
         
     def load_weights(self, model_path=None):
         print('loading model from {}'.format(model_path))
-        pretrained_dict = torch.load(model_path)
-        keys=list(pretrained_dict.keys())
+        ckpt = torch.load(model_path)
+        keys=list(ckpt.keys())
         if 'epoch' in keys:
             print('Restoring model from self-defined ckpt')
-            im_w, im_h=pretrained_dict['im_w'], pretrained_dict['im_h']
+            im_w, im_h=ckpt['im_w'], ckpt['im_h']
             print('Using resolution: {}x{}'.format(im_w,im_h))
-            pretrained_dict=pretrained_dict['model']
-        self.load_state_dict(pretrained_dict)
+            model=ckpt['model']
+            cfg.TEMP_MIN_SIZE=ckpt['temp_min_size']
+            cfg.TEMP_MAX_SIZE=ckpt['temp_max_size']
+            cfg.TEMP_NUM=ckpt['temp_num']
+            print('Using template config: {},{},{}'.format(cfg.TEMP_MIN_SIZE,cfg.TEMP_MAX_SIZE,cfg.TEMP_NUM))
+            self.load_state_dict(model)
         print('Load model successfully')
         
     def load_pretrained(self, model_path=None):
