@@ -92,6 +92,7 @@ def main(dataset_obj, model=None, params=None):
     VIS_DATASET=False
     TRACK_LAST_FRAME=False
 
+    template_anchors=G.gen_template_anchors(params['track_raw_anchors'], params['templates'], params['TK'], size=(params['rpn_conv_size'],params['rpn_conv_size']))
 #    writer=cv2.VideoWriter('./track.avi', cv2.VideoWriter_fourcc('M','J','P','G'), 30.0, (im_width, im_height))
 
     frame_ind=0
@@ -138,11 +139,10 @@ def main(dataset_obj, model=None, params=None):
                 roidb['temp_boxes']=temp_boxes
                 search_boxes=[]
                 for temp_box in temp_boxes:
-                    _,best_template=butil.best_search_box_test(params['templates'], temp_box, bound)
+                    best_template, _=butil.best_search_box_test(params['templates'], temp_box, template_anchors, bound)
                     search_boxes.append(best_template)
                 
                 search_boxes=np.array(search_boxes)
-#                print(search_boxes)
                 roidb['search_boxes']=search_boxes
 
                 roidb['track_raw_anchors']=params['track_raw_anchors']
@@ -151,6 +151,7 @@ def main(dataset_obj, model=None, params=None):
                 bboxes_list=inference_track(model, roidb)
                 last_temp_boxes=temp_boxes.copy()                
 
+                bbox_ok=[]
                 if not TRACK_LAST_FRAME and len(bboxes_list)>0:
                     valid_boxes=np.zeros((0,4), dtype=np.float32)
                     for i, bboxes in enumerate(bboxes_list):
@@ -158,7 +159,11 @@ def main(dataset_obj, model=None, params=None):
                             if len(bboxes.shape)>0:
                                 bboxes=bboxes.squeeze()
                             bbox=bboxes[:4]
-                            valid_boxes=np.append(valid_boxes, bbox.reshape(1,-1), 0)
+                            if bbox[2]-bbox[0]<=cfg.TEMP_MAX_SIZE-1 and bbox[3]-bbox[1]<=cfg.TEMP_MAX_SIZE-1:
+                                valid_boxes=np.append(valid_boxes, bbox.reshape(1,-1), 0)
+                                bbox_ok.append(1)
+                            else:
+                                bbox_ok.append(0)
                     if valid_boxes.shape[0]>0:
                         temp_boxes=valid_boxes.copy()
                 
@@ -167,7 +172,7 @@ def main(dataset_obj, model=None, params=None):
                     if not track_ids[i]:
                         continue
                     boxes_one_target = bboxes_list[index]
-                    if len(boxes_one_target)==0:
+                    if len(boxes_one_target)==0 or not bbox_ok[index]:
                         track_ids[i]=0
                         print('target {} disappears'.format(i))
                     else:
@@ -205,15 +210,16 @@ if __name__=='__main__':
     cfg.DET_SCORE_THRESH=0.95
     cfg.TRACK_SCORE_THRESH=0.0
     cfg.TRACK_MAX_DIST=20
-    cfg.TEST.RPN_NMS_THRESH=0.6
+    cfg.TEST.RPN_PRE_NMS_TOP_N=10
+    cfg.TEST.RPN_POST_NMS_TOP_N=2
     dataset='detrac'
     dataset_obj=None
     model_path=None
     
     if dataset=='detrac':
-        model_path='./ckpt/dl_mot_epoch_6.pkl'
+        model_path='./ckpt/dl_mot_epoch_40.pkl'
         dataset_obj=Detrac(im_width=im_width, im_height=im_height, name='DETRAC', load_gt=True)
-        dataset_obj.choice('MVI_39851')
+        dataset_obj.choice('MVI_40192')
 #        dataset_obj.choice('MVI_40201')        
     elif dataset=='kitti':
         model_path='./ckpt/dl_mot_epoch_60.pkl'

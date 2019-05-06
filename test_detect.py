@@ -62,7 +62,7 @@ def main(dataset_obj, model=None):
             break
 
 if __name__=='__main__':
-    model_path='./ckpt/dl_mot_epoch_6.pkl'
+    model_path='./ckpt/dl_mot_epoch_40.pkl'
     cfg.PHASE='TEST'
     cfg.DET_SCORE_THRESH=0.95
     cfg.TEST.RPN_NMS_THRESH=0.8
@@ -70,7 +70,7 @@ if __name__=='__main__':
     cfg.TEST.RPN_POST_NMS_TOP_N=1000
     cfg.TEST.DATASET='detrac'
     dataset_obj=detrac.Detrac(im_width=im_width, im_height=im_height, name='Detrac',load_gt=False)
-    dataset_obj.choice('MVI_39811')
+    dataset_obj.choice('MVI_63561')
     model=MotFRCNN(im_width, im_height, pretrained=False)
     model.load_weights(model_path)
     model.cuda()

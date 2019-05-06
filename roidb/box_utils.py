@@ -43,8 +43,8 @@ def align_boxes(ref_boxes, det_boxes):
     if len(ref_ids)==0:
         print('Empty ref_ids')
     else:
-        ref_ids=np.asarray(sorted(ref_ids))
-        det_ids=np.asarray(sorted(det_ids))
+        ref_ids=np.sort(ref_ids)
+        det_ids=np.sort(det_ids)
 
         for ref_id in ref_ids:
             ref_boxes_align.append(ref_boxes[ref_id])
@@ -77,7 +77,7 @@ def clip_bboxes(bboxes, w, h):
     _bboxes[:,3]=np.minimum(h-1, _bboxes[:,3])
     return _bboxes
     
-def best_search_box_test(templates, temp_box, bound):    
+def best_search_box_test(templates, temp_box, template_anchors, bound):    
     tmpl_sz=templates[:,0]
     tmpl_inds=np.arange(len(templates))
 
@@ -85,9 +85,13 @@ def best_search_box_test(templates, temp_box, bound):
     tw,th=x2-x1+1,y2-y1+1
 
     cx, cy=x1+0.5*tw, y1+0.5*th
-    sz=np.sqrt(tw*th)
-
-    ind1=np.where(np.bitwise_and(tmpl_sz>=tw, tmpl_sz>=th)==1)[0]     
+#    sz=np.sqrt(tw*th)
+    sz=max(tw,th)
+    if 2*sz<tmpl_sz[0]:
+        ind1=np.array([0])
+    else:
+        ind1=np.where(np.bitwise_and(tmpl_sz>=sz, tmpl_sz<=2.2*sz))[0]
+       
     if ind1.size==0:
         print(templates)
         print(temp_box)
@@ -96,22 +100,35 @@ def best_search_box_test(templates, temp_box, bound):
     if ind1.size==1:
         best_ind=ind1[0]
         best_sz_half=templates[best_ind,0]*0.5
-        return best_ind, np.array([cx-best_sz_half, cy-best_sz_half, cx+best_sz_half, cy+best_sz_half], dtype=np.float32)
+        cx=min(max(cx, best_sz_half), bound[0]-best_sz_half)
+        cy=min(max(cy, best_sz_half), bound[1]-best_sz_half)
+        choice_tmpl=np.array([cx-best_sz_half, cy-best_sz_half, cx+best_sz_half, cy+best_sz_half], dtype=np.float32)
+        anchors=template_anchors[best_ind]
+        anchors[:,[0,2]]+=choice_tmpl[0]
+        anchors[:,[1,3]]+=choice_tmpl[1]
+        return choice_tmpl, anchors
     
     templates=templates[ind1]
     tmpl_sz=tmpl_sz[ind1]
     tmpl_inds=tmpl_inds[ind1]
+    _anchors=template_anchors[ind1]
     
-    rat=np.abs(tmpl_sz/sz-2)
-
+    rat=np.abs(1.0*tmpl_sz/sz-1)
+    
     best_ind=np.argmin(rat)
     best_tmpl=templates[best_ind]
+    anchors=_anchors[best_ind]
+    
     best_sz_half=best_tmpl[0]*0.5
 
     cx=min(max(cx, best_sz_half), bound[0]-best_sz_half)
     cy=min(max(cy, best_sz_half), bound[1]-best_sz_half)
-
-    return tmpl_inds[best_ind], np.array([cx-best_sz_half, cy-best_sz_half, cx+best_sz_half, cy+best_sz_half], dtype=np.float32)
+    
+    choice_tmpl=np.array([cx-best_sz_half, cy-best_sz_half, cx+best_sz_half, cy+best_sz_half], dtype=np.float32)
+    anchors[:,[0,2]]+=choice_tmpl[0]
+    anchors[:,[1,3]]+=choice_tmpl[1]
+    
+    return choice_tmpl, anchors
 
 def best_search_box_random(temp_box, det_box, templates, template_anchors, bound, fg_thresh):
     tmpl_sz=templates[:,0]
@@ -122,9 +139,9 @@ def best_search_box_random(temp_box, det_box, templates, template_anchors, bound
 
     cx, cy=x1+0.5*tw, y1+0.5*th
     sz=max(tw,th)
+    #sz=np.sqrt(tw*th)
 
     if 2*sz<tmpl_sz[0]:
-        #inds=np.where(ind1==1)[0]
         inds=np.array([0])
     else:
         ind2=np.bitwise_and(tmpl_sz>=sz, tmpl_sz<=2*sz)
@@ -147,7 +164,6 @@ def best_search_box_random(temp_box, det_box, templates, template_anchors, bound
 
     choice_tmpl=np.array([cx-choice_sz_half, cy-choice_sz_half, cx+choice_sz_half, cy+choice_sz_half], dtype=np.float32)
     
-#    anchors = gen_region_anchors(raw_anchors, choice_tmpl.reshape(1,-1), bound, K, size)[0]
     anchors=template_anchors[inds][choice_ind]
     anchors[:,[0,2]]+=choice_tmpl[0]
     anchors[:,[1,3]]+=choice_tmpl[1]
@@ -160,6 +176,9 @@ def best_search_box_random(temp_box, det_box, templates, template_anchors, bound
 
     return choice_tmpl, overlaps, anchors
 
+'''
+deprecating...
+'''
 def best_search_box_train(temp_box, det_box, templates, template_anchors, bound, fg_thresh):
     tmpl_sz=templates[:,0]
 
@@ -168,11 +187,10 @@ def best_search_box_train(temp_box, det_box, templates, template_anchors, bound,
     cx, cy=x1+0.5*tw, y1+0.5*th
 
     ind1=np.where(np.bitwise_and(tmpl_sz>=tw, tmpl_sz>=th)==1)[0]     
-    _templates=templates[ind1] 
+    _templates=templates[ind1]
     _tmpl_anchors=template_anchors[ind1]
 
     overlaps_list=[]
-    tmpls=[]
     shift_tmpls=[]
     anchors_list=[]
     for i, tmpl in enumerate(_templates):
@@ -180,7 +198,6 @@ def best_search_box_train(temp_box, det_box, templates, template_anchors, bound,
         cx=min(max(cx, sz_half), bound[0]-sz_half)
         cy=min(max(cy, sz_half), bound[1]-sz_half)
         shift_tmpl=np.array([cx-sz_half, cy-sz_half, cx+sz_half, cy+sz_half], dtype=np.float32)
-#        _anchors=gen_region_anchors(raw_anchors, shift_tmpl.reshape(1,-1), bound, K, size)[0]
         _anchors=_tmpl_anchors[i]
         _anchors[:,[0,2]]+=shift_tmpl[0]
         _anchors[:,[1,3]]+=shift_tmpl[1]
@@ -188,7 +205,6 @@ def best_search_box_train(temp_box, det_box, templates, template_anchors, bound,
         overlaps=bbox_overlaps_per_image(_anchors, det_box.reshape(1,-1)).ravel()
         fg_inds=np.where(overlaps>=fg_thresh)[0]
         overlaps_list.append(fg_inds.size)
-        tmpls.append(tmpl)
         shift_tmpls.append(shift_tmpl)
         anchors_list.append(_anchors)
     
@@ -199,15 +215,12 @@ def best_search_box_train(temp_box, det_box, templates, template_anchors, bound,
     replicas=np.where(overlaps_list==max_overlaps_num)[0]
     if replicas.size==1:
         best_tmpl=shift_tmpls[best_ind]
-        return best_tmpl, max_overlaps_num, anchors_list[best_ind]
+        return best_tmpl, overlaps_list[best_ind], anchors_list[best_ind]
     else:
         if replicas.size==0:
             print(overlaps_list)
             print(max_overlaps_num)
             print(replicas)
             assert 0,'Weird error, replicas is zero'
-        tmpls=np.array(tmpls)
-        raw_tmpl_inds=np.arange(tmpls.shape[0])
-        tmpls=tmpls[replicas]
-        best_ind, best_tmpl=best_search_box_test(tmpls, temp_box, bound)
-        return best_tmpl, max_overlaps_num, anchors_list[raw_tmpl_inds[replicas][best_ind]]
+        best_tmpl, best_anchors=best_search_box_test(_templates, temp_box, _tmpl_anchors, bound)
+        return best_tmpl, max_overlaps_num, best_anchors

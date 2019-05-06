@@ -53,6 +53,10 @@ def crop_and_resize(pool_size, feature_map, boxes, box_ind):
     else:
         x1, y1, x2, y2= boxes.chunk(4, dim=1)
     box_ind=box_ind.view(-1,1).float()
+    if box_ind.shape[0]!=boxes.shape[0]:
+        print(box_ind)
+        print(boxes)
+        assert 0
     boxes = torch.cat((box_ind, x1, y1, x2, y2), 1)
     return RoIAlignFunction(pool_size[0],pool_size[1], 1)(feature_map, boxes)
 
@@ -202,7 +206,9 @@ class MotFRCNN(nn.Module):
         search_boxes=roidb['search_boxes']        
 
         num_boxes=[temp_boxes.shape[0]]
-        n_boxes=sum(num_boxes)        
+        n_boxes=sum(num_boxes) 
+        
+        assert n_boxes==search_boxes.shape[0], 'Error in dim 0'
 
         self.temp_boxes=temp_boxes
         self.search_boxes=search_boxes
@@ -278,15 +284,16 @@ class MotFRCNN(nn.Module):
         
         all_proposals=self.gen_proposals(detect_rpn_logits, detect_rpn_bbox, anchors, 2)
                 
-        num_proposals_per_box=[]
+        num_proposals_per_image=[]
         '''
         if nms, proposals may not have the same number of each box
         if not nms, each box has same number of proposals
         '''
         for prop in all_proposals:
-            num_proposals_per_box.append(prop.shape[0])
+            num_proposals_per_image.append(prop.shape[0])
         proposals=np.vstack(all_proposals)
-        roi_features=self.get_rois(batch_x, proposals, [len(proposals)])
+        # roi_features=self.get_rois(batch_x, proposals, [len(proposals)])
+        roi_features=self.get_rois(batch_x, proposals, num_proposals_per_image)
         frcnn_logits, frcnn_probs, frcnn_bbox=self.fastRCNN(roi_features)
         
         '''Fast-RCNN end'''
@@ -297,7 +304,7 @@ class MotFRCNN(nn.Module):
         ret['frcnn_probs']=frcnn_probs
         ret['frcnn_bbox']=frcnn_bbox
         ret['proposals']=proposals
-        ret['num_proposals']=num_proposals_per_box
+        ret['num_proposals']=num_proposals_per_image
         return ret
 
     '''Single object'''

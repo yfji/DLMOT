@@ -20,29 +20,29 @@ CAT_IND_MAP={'car':1,'van':2,'bus':3,'truck':4}
 class DetracDataReader(DataReader):
     def __init__(self, im_width, im_height, batch_size=8):
         super(DetracDataReader, self).__init__(im_width, im_height, batch_size=batch_size)
-        self.data_dir = op.join(cfg.DATA_DIR,'Insight-MVT_Annotation_Train')
-        self.anno_dir = op.join(cfg.DATA_DIR,'DETRAC-Train-Annotations-XML')                        
+        self.data_dir = op.join(cfg.DATA_DIR,'Insight-MVT_Annotation_Small')
+        self.anno_dir = op.join(cfg.DATA_DIR,'DETRAC-Small-Annotations-XML')                        
                 
         self.img_dirs=sorted(os.listdir(self.data_dir))
         self.anno_files=sorted(os.listdir(self.anno_dir))
 
-        for ext_seq in EXTRA_SEQS:
-            ext_anno='{}.xml'.format(ext_seq)
-            self.anno_files.remove(ext_anno)
-            self.img_dirs.remove(ext_seq)
+        # for ext_seq in EXTRA_SEQS:
+        #     ext_anno='{}.xml'.format(ext_seq)
+        #     self.anno_files.remove(ext_anno)
+        #     self.img_dirs.remove(ext_seq)
 
         self.index = 0        
         self.num_sequences = len(self.anno_files)
-        choice_inds=np.random.choice(np.arange(self.num_sequences), size=30, replace=False)
-        self.anno_files=[self.anno_files[i] for i in choice_inds]
-        self.img_dirs=[self.img_dirs[i] for i in choice_inds]
-        self.num_sequences=choice_inds.size
+        # choice_inds=np.random.choice(np.arange(self.num_sequences), size=3, replace=False)
+        # self.anno_files=[self.anno_files[i] for i in choice_inds]
+        # self.img_dirs=[self.img_dirs[i] for i in choice_inds]
+        # self.num_sequences=choice_inds.size
         self.num_images=0
         
         self.num_visualize = 100
         self.permute_inds = np.random.permutation(np.arange(self.num_sequences))
 
-        self.max_interval=5 if cfg.PHASE=='TRAIN' else 1
+        self.max_interval=3 if cfg.PHASE=='TRAIN' else 1
         
         self.iter_stop=False
 
@@ -67,8 +67,12 @@ class DetracDataReader(DataReader):
     def _parse_all_anno(self):
         print('Preparing dataset...')
         all_anno=[]
+        all_img_files=[]
         for i in range(self.num_sequences):
             anno_file=op.join(self.anno_dir, self.anno_files[i])
+            img_files=sorted(os.listdir(op.join(self.data_dir, self.img_dirs[i])))
+            all_img_files.append(img_files)
+
             tree = ET.parse(anno_file)
             root = tree.getroot()
 
@@ -82,6 +86,7 @@ class DetracDataReader(DataReader):
 
         assert self.num_images==len(all_anno), 'Annotations: {} and num_images: {}'.format(len(all_anno), self.num_images)
         print('Dataset is available')
+        self.all_img_files=all_img_files
         self.annotations=all_anno
     
 
@@ -94,8 +99,8 @@ class DetracDataReader(DataReader):
 
     def _get_roidb(self, seq_index, ref_ind, det_ind):
         img_dir=op.join(self.data_dir, self.img_dirs[seq_index])
-
-        img_files=sorted(os.listdir(img_dir))
+        img_files=self.all_img_files[seq_index]
+        #img_files=sorted(os.listdir(img_dir))
         roidb={}
             
         temp_boxes={}
@@ -176,11 +181,14 @@ class DetracDataReader(DataReader):
             for i, box in enumerate(temp_boxes_align):
                 temp_box_ok=False
                 if box[2]-box[0]<self.MAX_TEMPLATE_SIZE-1 and box[3]-box[1]<self.MAX_TEMPLATE_SIZE-1:
+                    
                     if cfg.PHASE=='TEST':
-                        _,search_box=butil.best_search_box_test(self.templates, box, self.bound)
+                        search_box, anchors=butil.best_search_box_test(self.templates, box, self.template_anchors, self.bound)
                         search_boxes=np.append(search_boxes, search_box.reshape(1,-1), 0)
+                        anchors_list.append(anchors)
                         good_inds.append(i)
                         temp_box_ok=True
+                    
                     else:
                         ret=butil.best_search_box_random(box, \
                              det_boxes_align[i], self.templates, self.template_anchors, \
@@ -196,7 +204,20 @@ class DetracDataReader(DataReader):
                             temp_box_ok=True
                             if num_instances==5:
                                 break
-
+                    '''
+                    search_box, anchors = butil.best_search_box_test(self.templates, box, self.template_anchors, self.bound)
+                    overlaps=U.bbox_overlaps_per_image(anchors, det_boxes_align[i].reshape(1,-1))
+                    fg_inds=np.where(overlaps.ravel()>=cfg.TRAIN.TRACK_RPN_POSITIVE_THRESH)[0]
+                    if fg_inds.size>0:
+                        search_boxes=np.append(search_boxes, search_box.reshape(1,-1), 0)
+                        overlaps_list.append(overlaps)
+                        anchors_list.append(anchors)
+                        good_inds.append(i)
+                        temp_box_ok=True
+                        num_instances+=1
+                        if num_instances==5:
+                            break
+                    '''  
                 if not temp_box_ok:
                     search_boxes=np.append(search_boxes, np.array([[0,0,0,0]]), 0)
 
@@ -215,6 +236,7 @@ class DetracDataReader(DataReader):
             roidb['bound']=self.bound
             roidb['bbox_overlaps']=self.overlap_list2array(self.template_anchors[0].shape[0], overlaps_list)
 
+            roidb['track_raw_anchors']=self.track_raw_anchors
             roidb['track_anchors']=anchors_list
 
             '''detectio anchors'''

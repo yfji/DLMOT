@@ -32,8 +32,8 @@ __C.RPN_CONV_SIZE=__C.DET_ROI_SIZE-__C.TEMP_ROI_SIZE+1
 
 __C.TRACK_BASIC_SIZE=16
 __C.TRACK_RATIOS=np.asarray([0.5,1,2])
+#__C.TRACK_SCALES=np.asarray([2,4,7,9,12,13,18])
 __C.TRACK_SCALES=np.asarray([1.5,4,8,16])
-#__C.TRACK_SCALES=np.asarray([2,4,8])
 
 ###Detection and track thresholds###
 __C.DET_SCORE_THRESH=0.7
@@ -52,6 +52,7 @@ __C.BBOX_NORMALIZE_STDS = np.array([[0.1, 0.1, 0.2, 0.2]])
 __C.RPN_BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
 __C.BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2])
 
+__C.CTRLC=False
 """TRAIN"""
 '''Fast-RCNN'''
 __C.TRAIN = edict()

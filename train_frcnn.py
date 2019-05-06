@@ -168,7 +168,9 @@ class TrainEngine(object):
         for epoch in range(start_epoch, num_epochs):
             config_params['epoch']=epoch
             train_epoch(self.model, data_loader, optimizer, logger, config_params)
-                
+            
+            if cfg.CTRLC:
+                break
             if epoch>0 and epoch%self.snapshot==0:
                 self.save_ckpt(stepvalues, epoch, epoch_iters, lr, logger)
             if len(stepvalues)>0 and (epoch+1)==stepvalues[0]:
@@ -180,11 +182,11 @@ class TrainEngine(object):
                     if self.backbone_pretrained and param_group['key']=='backbone':
                         param_group['lr']*=self.lr_mult
                 stepvalues.pop(0)
-            
-        self.save_ckpt(stepvalues, epoch, epoch_iters, lr, logger)
-        
-        msg='Finish training!!\nTotal jumped batch: {}'.format(num_jumped)
-        logger.info(msg)
+
+        if not cfg.CTRLC:   
+            self.save_ckpt(stepvalues, epoch, epoch_iters, lr, logger)        
+            msg='Finish training!!\nTotal jumped batch: {}'.format(num_jumped)
+            logger.info(msg)
             
 if __name__=='__main__':
     set_gpu_id()

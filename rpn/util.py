@@ -32,7 +32,7 @@ def bbox_overlap_rpn(anchors, boxes):
             box_area=(box[2]-box[0]+1)*(box[3]-box[1]+1)
             union_areas=anchor_areas+box_area-intersec
             overlap=1.0*intersec/union_areas
-            bbox_overlaps[starts[i][0]:starts[i][-1]+1,i]=overlap[...]
+            bbox_overlaps[starts[i][0]:starts[i][-1]+1,i]=overlap.ravel()[...]
     
     return bbox_overlaps
 
@@ -40,7 +40,6 @@ def bbox_overlap_frcnn(anchors, boxes):
     n_anchor=anchors.shape[0]
     n_boxes=boxes.shape[0]
     
-#    print(anchors[:10])
     bbox_overlaps=np.zeros((n_anchor, n_boxes), dtype=np.float32)
     x1=anchors[:,0]
     y1=anchors[:,1]
@@ -66,7 +65,7 @@ def bbox_overlap_frcnn(anchors, boxes):
             union_areas=anchor_areas+box_area-intersec
             overlap=1.0*intersec/union_areas
             
-            bbox_overlaps[:,i]=overlap[...]
+            bbox_overlaps[:,i]=overlap.ravel()[...]
         
     return bbox_overlaps
 

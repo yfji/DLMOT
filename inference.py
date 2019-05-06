@@ -70,9 +70,9 @@ def get_detect_output(output_dict, batch_size=-1):
                 
                 bboxes=bbox_order[pick].reshape(-1,bbox_order.shape[1])
                 nms_scores=bboxes[:,-1]
-                bboxes=bboxes[np.where(nms_scores>cfg.DET_SCORE_THRESH)[0],:]
+                bboxes=bboxes[np.where(nms_scores>=cfg.DET_SCORE_THRESH)[0]]
                 if bboxes.shape[0]>0:
-                     print('Class {} has {} instances!'.format(CLASSES[i], bboxes.shape[0]))
+                     pass#print('Class {} has {} instances!'.format(CLASSES[i], bboxes.shape[0]))
                 cls_bboxes.append(bboxes)
 
         ret['cls_bboxes']=cls_bboxes
@@ -102,7 +102,7 @@ def get_track_output(output_dict, configs):
     bboxes_list=[]
 
     for i in range(num_targets):
-        
+        '''
         temp_box=temp_boxes[i]
         temp_cx=0.5*(temp_box[0]+temp_box[2])
         temp_cy=0.5*(temp_box[1]+temp_box[3])
@@ -159,7 +159,7 @@ def get_track_output(output_dict, configs):
 
             fg_inds=np.where(np.bitwise_and(dist_cx<cfg.TRACK_MAX_DIST, dist_cy<cfg.TRACK_MAX_DIST)==1)[0]
             bboxes_list.append(bboxes[fg_inds])
-        '''
+        
     ret={}
     ret['bboxes_list']=bboxes_list
     
@@ -171,12 +171,8 @@ def inference_detect(model, roidb, batch_size=-1):
         anchors=anchors[0]
 
     if cfg.IMAGE_NORMALIZE:
-        roidb['temp_image']-=roidb['temp_image'].min()
-        roidb['temp_image']/=roidb['temp_image'].max()
-        roidb['det_image']-=roidb['det_image'].min()
-        roidb['det_image']/=roidb['det_image'].max()
-        roidb['temp_image']=(roidb['temp_image']-0.5)/0.5
-        roidb['det_image']=(roidb['det_image']-0.5)/0.5
+        roidb['temp_image']/=255.0
+        roidb['det_image']/=255.0
     else:
         roidb['temp_image']-=cfg.PIXEL_MEANS
         roidb['det_image']-=cfg.PIXEL_MEANS
@@ -190,18 +186,13 @@ def inference_track(model, roidb):
     raw_anchors=roidb['track_raw_anchors']
     
     if cfg.IMAGE_NORMALIZE:
-        roidb['temp_image']-=roidb['temp_image'].min()
-        roidb['temp_image']/=roidb['temp_image'].max()
-        roidb['det_image']-=roidb['det_image'].min()
-        roidb['det_image']/=roidb['det_image'].max()
-        roidb['temp_image']=(roidb['temp_image']-0.5)/0.5
-        roidb['det_image']=(roidb['det_image']-0.5)/0.5
+        roidb['temp_image']/=255.0
+        roidb['det_image']/=255.0
     else:
         roidb['temp_image']-=cfg.PIXEL_MEANS
         roidb['det_image']-=cfg.PIXEL_MEANS
         
     bound=roidb['bound']
-#    print(bound)
     
     output_dict=model(roidb, task='track')
     
@@ -240,7 +231,7 @@ def draw_detect_boxes(images, detects, with_proposals=True):
             x1,y1,x2,y2,scores=np.split(bbox_with_score, 5, axis=1)
             
             for k in range(bbox_with_score.shape[0]):
-                cv2.rectangle(image, (x1[k],y1[k]),(x2[k],y2[k]), COLORS[j], 2)
+                cv2.rectangle(image, (x1[k],y1[k]),(x2[k],y2[k]), COLORS[j], 3)
                 cv2.putText(image, '{}:{}'.format(CLASSES[j], scores[k]), (x1[k], y1[k]), cv2.FONT_HERSHEY_PLAIN, 0.9, COLORS[j], 1)
         
         if with_proposals:
@@ -270,11 +261,15 @@ def draw_track_boxes(det_image, temp_boxes, search_boxes, bbox_list):
 if __name__=='__main__':
     cfg.PHASE='TEST'
     #cfg.NUM_CLASSES=len(CLASSES)
+    cfg.TRACK_SCORE_THRESH=0.0
     cfg.TEST.RPN_NMS_THRESH=0.7
+    cfg.TEST.RPN_PRE_NMS_TOP_N=5000
+    cfg.TEST.RPN_POST_NMS_TOP_N=1000
+    cfg.TEST.NMS_THRESH=0.5
     
     im_width=640
     im_height=384
-    model_path='./ckpt/dl_mot_epoch_6.pkl'
+    model_path='./ckpt/dl_mot_epoch_30.pkl'
     if not op.exists('./out_images'):
         os.mkdir('./out_images')
     
@@ -287,24 +282,24 @@ if __name__=='__main__':
     num_samples=loader.__len__()
     print('Load {} samples'.format(num_samples))
     inds=np.random.permutation(np.arange(num_samples))
-    for i in range(16):
+    for i in range(36):
         roidb=loader.__getitem__(inds[i])    
         if len(roidb)==0:
             print('No targets, return')
 
-        else:
+        else:            
             images=[roidb['temp_image'].squeeze().astype(np.uint8, copy=True), roidb['det_image'].squeeze().astype(np.uint8, copy=True)]
+            '''
             outputs=inference_detect(model ,roidb)
-            cv2.imwrite('out_images/raw_{}.jpg'.format(i), images[0])
+            #cv2.imwrite('out_images/raw_{}.jpg'.format(i), images[0])
             draw_detect_boxes(images, outputs, with_proposals=False)
             cv2.imwrite('out_images/result_{}.jpg'.format(i), images[0])
-
             '''
             bboxes_list=inference_track(model, roidb)
             det_image=images[1]
-            draw_track_boxes(det_image, roidb['temp_boxes'], roidb['search_boxes'], bboxes_list, fg_inds_local_list=None)
-            cv2.imwrite('out_images/raw_{}.jpg'.format(i), images[0])
+            draw_track_boxes(det_image, roidb['temp_boxes'], roidb['search_boxes'], bboxes_list)
+            #cv2.imwrite('out_images/raw_{}.jpg'.format(i), images[0])
             cv2.imwrite('out_images/result_{}.jpg'.format(i), det_image)
-            '''
+            
             print('Track result has been written to result.jpg')        
             

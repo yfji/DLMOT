@@ -115,6 +115,9 @@ def gen_template_anchors(_anchors, templates, K=9, size=None):
     box_anchors=[anchors[np.newaxis,:,:] for anchors in box_anchors]
     box_anchors=np.concatenate(box_anchors)
     return box_anchors
+
+def gen_template_anchors_mscale(raw_anchors, templates, K=9, size=None):
+    pass
     
 if __name__=='__main__':
     anchors=generate_anchors()
